@@ -170,11 +170,15 @@
       '<input id="f-title" name="title" maxlength="120" autocomplete="off" placeholder="e.g. Weekly groceries" required></div>' +
       '<div class="row2">' +
       '<div class="field"><label for="f-amount">Amount <span class="req">*</span></label>' +
-      '<div class="amount-wrap"><input id="f-amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" required><span class="cur">' + U.esc(D.settings.currency) + '</span></div></div>' +
+      '<div class="amount-wrap has-select"><input id="f-amount" name="amount" inputmode="decimal" autocomplete="off" placeholder="0.00" required>' +
+      '<select name="currency" class="cur-select" aria-label="Currency">' + U.CURRENCIES.concat(U.CURRENCIES.includes(D.settings.currency) ? [] : [D.settings.currency]).map(c => '<option>' + c + '</option>').join('') + '</select></div></div>' +
       '<div class="field"><label for="f-date">Date <span class="req">*</span></label>' +
       '<input id="f-date" name="date" type="date" required>' +
       '<div class="quick-dates"><button type="button" class="chip" data-d="0">Today</button><button type="button" class="chip" data-d="-1">Yesterday</button><button type="button" class="chip" data-d="-2">2 days ago</button></div></div>' +
       '</div>' +
+      '<div class="fx-row" hidden><label for="f-rate" class="label">Exchange rate</label><div class="fx-line"><span class="fx-one"></span>' +
+      '<input id="f-rate" name="rate" inputmode="decimal" autocomplete="off"><span class="fx-main"></span><span class="fx-eq"></span></div>' +
+      '<p class="muted small fx-note"></p></div>' +
       '<div class="row2">' +
       '<div class="field"><label for="f-cat">Category <span class="req">*</span></label><select id="f-cat" name="categoryId" required></select></div>' +
       '<div class="field"><label for="f-sub">Subcategory</label><select id="f-sub" name="subcategoryId"></select></div>' +
@@ -188,8 +192,41 @@
       '</form>');
 
     const f = form.elements;
+    const main = D.settings.currency;
     f.title.value = ex.title || '';
-    f.amount.value = ex.amountMinor ? U.minorToInput(ex.amountMinor) : '';
+    f.amount.value = ex.origCurrency ? U.minorToInput(ex.origAmountMinor) : (ex.amountMinor ? U.minorToInput(ex.amountMinor) : '');
+    f.currency.value = ex.origCurrency || main;
+    if (ex.rate) f.rate.value = U.fmtRate(ex.rate);
+
+    // Foreign currency: show the rate row, fetch today's rate, and preview the converted amount.
+    const fxRow = $('.fx-row', form);
+    let fxFor = ex.origCurrency || null;
+    function fxPreview() {
+      const cur = f.currency.value, foreign = cur !== main;
+      fxRow.hidden = !foreign;
+      if (!foreign) return;
+      $('.fx-one', form).textContent = '1 ' + cur + ' =';
+      $('.fx-main', form).textContent = main;
+      const a = U.parseAmount(f.amount.value), r = U.parseRate(f.rate.value);
+      $('.fx-eq', form).textContent = a.ok && r ? '→ ' + U.money(Math.round(a.value * r)) : '';
+    }
+    async function fxFetch() {
+      const cur = f.currency.value;
+      if (cur === main) { fxPreview(); return; }
+      if (fxFor === cur && f.rate.value) { fxPreview(); return; }
+      fxFor = cur; f.rate.value = ''; fxPreview();
+      const note = $('.fx-note', form);
+      note.textContent = App.i18n.t('Getting today’s rate…');
+      const r = await U.fetchRate(cur, main);
+      if (f.currency.value !== cur) return; // user changed it meanwhile
+      if (r) { f.rate.value = U.fmtRate(r); note.textContent = App.i18n.t('Today’s rate – you can change it.'); }
+      else note.textContent = App.i18n.t('Could not get the rate (offline?). Please type it.');
+      fxPreview();
+    }
+    f.currency.addEventListener('change', fxFetch);
+    f.amount.addEventListener('input', fxPreview);
+    f.rate.addEventListener('input', fxPreview);
+    fxPreview();
     f.date.value = ex.date;
     f.notes.value = ex.notes || '';
     UI.$$('input[name=paymentMethod]', form).forEach(r => { r.checked = r.value === ex.paymentMethod; });
@@ -212,20 +249,22 @@
       errBox.hidden = true;
       const input = {
         title: f.title.value, amount: f.amount.value, date: f.date.value,
+        currency: f.currency.value, rate: f.rate.value,
         categoryId: f.categoryId.value, subcategoryId: f.subcategoryId.value || null,
         paymentMethod: (form.querySelector('input[name=paymentMethod]:checked') || {}).value || 'Other', notes: f.notes.value
       };
       saving = true; UI.$$('button', footer).forEach(b => { b.disabled = true; });
       try {
-        if (isEdit) await D.updateExpense(existing.id, input);
+        let rec;
+        if (isEdit) rec = await D.updateExpense(existing.id, input);
         else {
-          const rec = await D.addExpense(input);
+          rec = await D.addExpense(input);
           if (f.fav && f.fav.checked) { await D.addFavourite(rec); f.fav.checked = false; }
         }
         D.saveSettings({ lastCategoryId: input.categoryId, lastPaymentMethod: input.paymentMethod }).catch(() => {});
-        UI.toast(isEdit ? 'Expense updated' : 'Expense saved: ' + U.money(U.parseAmount(input.amount).value));
+        UI.toast(isEdit ? 'Expense updated' : 'Expense saved: ' + U.money(rec.amountMinor));
         if (again) {
-          f.title.value = ''; f.amount.value = ''; f.notes.value = ''; f.title.focus();
+          f.title.value = ''; f.amount.value = ''; f.notes.value = ''; f.title.focus(); fxPreview();
         } else m.close();
       } catch (err) {
         errBox.textContent = err.message; errBox.hidden = false;
@@ -245,11 +284,17 @@
     return m;
   };
 
+  // Amount in the main currency, plus the original amount underneath for foreign-currency expenses.
+  UI.amountHtml = function (e) {
+    return U.money(e.amountMinor) + (e.origCurrency ? '<small class="orig-amt">' + U.esc(U.money(e.origAmountMinor, e.origCurrency)) + '</small>' : '');
+  };
+
   UI.expenseDetails = function (id) {
     const D = App.data, e = D.expense(id);
     if (!e) return;
     const rows = [
       ['Amount', '<b class="amount-lg">' + U.money(e.amountMinor) + '</b>'],
+      ...(e.origCurrency ? [['Original amount', U.esc(U.money(e.origAmountMinor, e.origCurrency)) + ' <span class="muted small">· 1 ' + U.esc(e.origCurrency) + ' = ' + U.esc(U.fmtRate(e.rate)) + ' ' + U.esc(D.settings.currency) + '</span>']] : []),
       ['Date', U.esc(U.fmtDate(e.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))],
       ['Category', UI.catBadge(e.categoryId, e.subcategoryId)],
       ['Payment method', U.esc(e.paymentMethod)],

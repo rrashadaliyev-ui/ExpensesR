@@ -280,6 +280,17 @@ select:disabled { opacity: .6; }
 .radio-card input { margin-top: 4px; }
 .move-to { margin-top: 8px; display: grid; }
 
+/* ============ Currencies ============ */
+.amount-wrap.has-select input { padding-right: 84px; }
+.cur-select { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: auto; padding: 5px 6px; font-size: .85rem; font-weight: 600; border-color: transparent; background: var(--card-2); }
+.fx-row { margin: -4px 0 14px; padding: 10px 12px; background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; }
+.fx-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; font-weight: 600; }
+.fx-line input { width: 110px; padding: 6px 8px; }
+.fx-eq { color: var(--accent); }
+.fx-note { margin: 4px 0 0; }
+.conv-rate { margin: 8px 0 2px; }
+.orig-amt { display: block; font-size: .75rem; font-weight: 500; color: var(--muted); }
+
 /* ============ Budget & savings ============ */
 .budget-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 14px; }
 .budget-ok { color: var(--ok); }

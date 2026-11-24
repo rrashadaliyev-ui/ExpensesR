@@ -97,7 +97,7 @@
           '<td data-label="Title"><button class="linklike" data-view>' + U.esc(e.title) + '</button>' + (e.notes ? '<div class="muted small clamp">' + U.esc(e.notes) + '</div>' : '') + '</td>' +
           '<td data-label="Category">' + UI.catBadge(e.categoryId, e.subcategoryId) + '</td>' +
           '<td data-label="Payment">' + U.esc(e.paymentMethod) + '</td>' +
-          '<td class="num strong" data-label="Amount">' + U.money(e.amountMinor) + '</td>' +
+          '<td class="num strong" data-label="Amount">' + UI.amountHtml(e) + '</td>' +
           '<td class="actions"><button class="icon-btn" data-edit title="Edit" aria-label="Edit">✎</button><button class="icon-btn danger" data-del title="Delete" aria-label="Delete">🗑</button></td></tr>').join('') +
         '</tbody></table></div>' +
         (list.length > shown.length ? '<div class="more"><button class="btn ghost" data-more>Show more (' + (list.length - shown.length) + ' remaining)</button></div>' : '')
@@ -157,8 +157,9 @@
 
   function exportCSV(list, name) {
     const D = App.data;
-    const rows = [['Date', 'Title', 'Amount', 'Currency', 'Category', 'Subcategory', 'Payment Method', 'Notes', 'Created', 'ID']]
-      .concat(list.map(e => [e.date, e.title, U.minorToInput(e.amountMinor), D.settings.currency, (D.cat(e.categoryId) || {}).name || '', e.subcategoryId ? (D.cat(e.subcategoryId) || {}).name || '' : '', e.paymentMethod, e.notes, e.createdAt, e.id]));
+    const rows = [['Date', 'Title', 'Amount', 'Currency', 'Original Amount', 'Original Currency', 'Exchange Rate', 'Category', 'Subcategory', 'Payment Method', 'Notes', 'Created', 'ID']]
+      .concat(list.map(e => [e.date, e.title, U.minorToInput(e.amountMinor), D.settings.currency,
+        e.origCurrency ? U.minorToInput(e.origAmountMinor) : '', e.origCurrency || '', e.rate || '', (D.cat(e.categoryId) || {}).name || '', e.subcategoryId ? (D.cat(e.subcategoryId) || {}).name || '' : '', e.paymentMethod, e.notes, e.createdAt, e.id]));
     UI.download(name + '-' + U.today() + '.csv', UI.toCSV(rows), 'text/csv;charset=utf-8');
   }
 

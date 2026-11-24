@@ -29,6 +29,8 @@ A plain HTML/CSS/JS app with no build step and no framework. Classic `<script>` 
 - **Default categories** follow the language: `DEFAULT_NAMES_AZ` in `data.js`. `translateDefaultCategories(lang)` renames only names that are still exactly a default name. It runs when the language is switched, and on startup in Azerbaijani.
 - **Dashboard panels** (budget, debts, quick add) can be hidden. They're stored in `settings.hiddenPanels` and toggled in Settings → Dashboard panels.
 
+- **Currencies**: `amountMinor` is **always in the main currency** (`settings.currency`), so every calculation stays simple. A foreign-currency expense also stores `origCurrency`, `origAmountMinor` and `rate` (1 orig = rate main) for display. `App.data.changeMainCurrency(to, 'convert'|'label', rate)` converts expenses, debts, budgets and favourites, or only relabels them. Live rates come from `U.fetchRate` (open.er-api.com, free, no key); the user can always edit the rate.
+
 ## Deployment
 
 **Every release: bump the `?v=` value on all css/js links in `index.html`** (one value everywhere). GitHub Pages lets browsers cache files for 10 minutes; without the bump, phones mixed old and new files (a new page with old data code: it couldn't save debts and showed English).

@@ -103,24 +103,50 @@
   U.minorToInput = m => (m / 100).toFixed(2);
   U.minorToNumber = m => Math.round(m) / 100;
 
-  let moneyFmt = null, moneyFmtKey = '';
+  const moneyFmts = {};
   const plain = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const SYMBOLS = { AZN: '₼', USD: '$', EUR: '€', GBP: '£', TRY: '₺', RUB: '₽' };
-  U.money = function (minor) {
-    const cur = (App.data && App.data.settings && App.data.settings.currency) || 'USD';
+  U.CURRENCIES = ['AZN', 'USD', 'EUR', 'GBP', 'TRY', 'RUB', 'GEL', 'KZT', 'UAH', 'AED', 'SAR', 'INR', 'CNY', 'JPY', 'CAD', 'AUD', 'CHF'];
+  U.mainCurrency = () => (App.data && App.data.settings && App.data.settings.currency) || 'AZN';
+
+  // money(minor)       → amount in the MAIN currency (all totals, budgets, reports)
+  // money(minor, 'USD') → amount in a specific currency (e.g. the original currency of a foreign expense)
+  U.money = function (minor, currency) {
+    const cur = currency || U.mainCurrency();
     const v = (minor || 0) / 100;
     if (isAz()) {
       // Azerbaijani style: 1 300,50 ₼  (space between thousands, comma for decimals, symbol after)
       const s = plain.format(Math.abs(v)).replace(/,/g, ' ').replace('.', ',');
       return (v < 0 ? '−' : '') + s + ' ' + (SYMBOLS[cur] || cur);
     }
-    if (moneyFmtKey !== cur) {
-      try { moneyFmt = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }); }
-      catch (e) { moneyFmt = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-      moneyFmtKey = cur;
+    if (!moneyFmts[cur]) {
+      try { moneyFmts[cur] = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }); }
+      catch (e) { moneyFmts[cur] = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     }
-    return moneyFmt.format(v);
+    return moneyFmts[cur].format(v);
   };
+
+  /*
+   * Exchange rates (free service open.er-api.com, no account needed; only currency codes are sent).
+   * Returns how many `to` you get for 1 `from`, or null if offline / unavailable (the user can type it).
+   */
+  const rateCache = {};
+  U.fetchRate = async function (from, to) {
+    if (from === to) return 1;
+    const key = from + '>' + to;
+    if (rateCache[key] && Date.now() - rateCache[key].t < 3600000) return rateCache[key].v;
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/' + encodeURIComponent(from));
+      const json = await res.json();
+      const v = json && json.rates && json.rates[to];
+      if (!v) return null;
+      rateCache[key] = { v, t: Date.now() };
+      return v;
+    } catch (e) { return null; }
+  };
+  // Parses a rate typed by the user ("1.7", "1,7"). Returns a positive number or null.
+  U.parseRate = s => { const v = Number(String(s == null ? '' : s).trim().replace(',', '.')); return isFinite(v) && v > 0 && v < 1e7 ? v : null; };
+  U.fmtRate = v => String(Math.round(v * 1e6) / 1e6);
   U.pct = (part, whole) => whole ? (part / whole * 100) : 0;
   U.fmtPct = v => (Math.round(v * 10) / 10).toFixed(1) + '%';
 

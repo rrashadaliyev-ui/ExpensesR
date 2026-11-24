@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const U = App.U, UI = App.ui;
-  const CURRENCIES = ['AZN', 'USD', 'EUR', 'GBP', 'TRY', 'RUB', 'GEL', 'KZT', 'UAH', 'AED', 'SAR', 'INR', 'CNY', 'JPY', 'CAD', 'AUD', 'CHF'];
+  const CURRENCIES = App.U.CURRENCIES;
 
   function render(root) {
     const D = App.data;
@@ -13,9 +13,9 @@
       '<section class="card"><h2>Preferences</h2><div class="settings-grid">' +
       '<div class="field"><label for="s-lang">Language</label><select id="s-lang"><option value="en">English</option><option value="az">Azərbaycan dili</option></select></div>' +
       '<div class="field"><label for="s-theme">Theme</label><select id="s-theme"><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></div>' +
-      '<div class="field"><label for="s-cur">Currency</label><select id="s-cur">' + CURRENCIES.concat(CURRENCIES.includes(s.currency) ? [] : [s.currency]).map(c => '<option>' + c + '</option>').join('') + '</select></div>' +
+      '<div class="field"><label for="s-cur">Main currency</label><select id="s-cur">' + CURRENCIES.concat(CURRENCIES.includes(s.currency) ? [] : [s.currency]).map(c => '<option>' + c + '</option>').join('') + '</select></div>' +
       '<div class="field"><label for="s-week">Week starts on</label><select id="s-week"><option value="1">Monday</option><option value="0">Sunday</option></select></div>' +
-      '</div><p class="muted small">Changing currency only changes the symbol shown – amounts are not converted.</p></section>' +
+      '</div><p class="muted small">All totals, budgets and reports use the main currency. To record a purchase in another currency, pick it next to the amount when adding the expense.</p></section>' +
 
       (App.storage.requiresAuth && App.storage.user
         ? '<section class="card"><h2>Cloud account</h2><p>Signed in as <b>' + U.esc(App.storage.user.email || App.storage.user.displayName || '') + '</b>. Your data is saved in your Google account (Firebase) and syncs across devices.</p>' +
@@ -56,7 +56,7 @@
     lang.addEventListener('change', () => App.i18n.set(lang.value));
     theme.value = s.theme || 'system'; cur.value = s.currency; week.value = String(s.weekStart);
     theme.addEventListener('change', () => D.saveSettings({ theme: theme.value }));
-    cur.addEventListener('change', () => D.saveSettings({ currency: cur.value }));
+    cur.addEventListener('change', () => { const to = cur.value; cur.value = s.currency; currencyDialog(s.currency, to); });
     week.addEventListener('change', () => D.saveSettings({ weekStart: Number(week.value) }));
 
     if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(p => {
@@ -131,6 +131,38 @@
       if (await UI.confirm({ title: 'Delete ALL data?', message: 'This permanently deletes <b>all ' + D.expenses.length + ' expenses and all categories</b>. It cannot be undone unless you have a backup file.', okText: 'Delete everything', danger: true })) {
         await D.clearAll(); UI.toast('All data deleted');
       }
+    });
+  }
+
+  // Changing the main currency: convert every amount with a rate, or only fix the label.
+  function currencyDialog(from, to) {
+    const D = App.data;
+    const body = UI.h('<form novalidate>' +
+      '<p>' + U.esc(from) + ' → <b>' + U.esc(to) + '</b></p>' +
+      '<label class="radio-card"><input type="radio" name="mode" value="convert" checked><span><b>Convert all amounts</b><br>' +
+      '<span class="muted small">Every expense, budget, loan and favourite is converted with the rate below. Each expense also keeps its original amount.</span>' +
+      '<span class="fx-line conv-rate"><span>1 ' + U.esc(from) + ' =</span><input name="rate" inputmode="decimal" autocomplete="off" aria-label="Exchange rate"><span>' + U.esc(to) + '</span></span>' +
+      '<span class="muted small fx-note"></span></span></label>' +
+      '<label class="radio-card"><input type="radio" name="mode" value="label"><span><b>Only change the symbol</b><br>' +
+      '<span class="muted small">Use this if your amounts were already in ' + U.esc(to) + ' and only the symbol was wrong. Nothing is converted.</span></span></label>' +
+      '<div class="form-error" hidden></div></form>');
+    const m = UI.modal({ title: 'Change main currency', body, footer: '<button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-ok>Change currency</button>' });
+    const rate = body.elements.rate, note = UI.$('.fx-note', body);
+    note.textContent = App.i18n.t('Getting today’s rate…');
+    U.fetchRate(from, to).then(r => {
+      if (r) { rate.value = U.fmtRate(r); note.textContent = App.i18n.t('Today’s rate – you can change it.'); }
+      else note.textContent = App.i18n.t('Could not get the rate (offline?). Please type it.');
+    });
+    rate.addEventListener('focus', () => { body.querySelector('input[value=convert]').checked = true; });
+    let busy = false;
+    UI.$('[data-ok]', m.el).addEventListener('click', async () => {
+      if (busy) return; busy = true;
+      try {
+        const mode = body.querySelector('input[name=mode]:checked').value;
+        await D.changeMainCurrency(to, mode, rate.value);
+        UI.toast(mode === 'convert' ? 'All amounts converted to ' + to : 'Currency changed to ' + to); m.close();
+      } catch (e) { const err = UI.$('.form-error', body); err.textContent = e.message; err.hidden = false; }
+      busy = false;
     });
   }
 

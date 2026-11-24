@@ -276,6 +276,17 @@
         amountMinor = p.value;
       }
       if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) throw new Error('Amount must be greater than zero.');
+      // Foreign currency: the typed amount is in `currency`; convert it to the main currency with `rate`
+      // (1 unit of currency = rate units of the main currency). The original is kept for display.
+      let origCurrency = null, origAmountMinor = null, rate = null;
+      const main = this.settings.currency;
+      if (input.currency && input.currency !== main) {
+        rate = typeof input.rate === 'number' ? input.rate : U.parseRate(input.rate);
+        if (!rate) throw new Error('Please enter the exchange rate.');
+        origCurrency = input.currency; origAmountMinor = amountMinor;
+        amountMinor = Math.round(origAmountMinor * rate);
+        if (amountMinor <= 0) throw new Error('Amount must be greater than zero.');
+      }
       if (!U.isValidDateStr(input.date)) throw new Error('Please choose a valid date.');
       const categoryId = input.categoryId || null;
       const subcategoryId = input.subcategoryId || null;
@@ -284,7 +295,52 @@
       this.validateCategoryPair(categoryId, subcategoryId, !unchangedCats);
       const paymentMethod = PAYMENT_METHODS.includes(input.paymentMethod) ? input.paymentMethod : 'Other';
       const notes = String(input.notes || '').trim().slice(0, 1000);
-      return { title, amountMinor, date: input.date, categoryId, subcategoryId, paymentMethod, notes };
+      return { title, amountMinor, origCurrency, origAmountMinor, rate, date: input.date, categoryId, subcategoryId, paymentMethod, notes };
+    },
+
+    /*
+     * Change the MAIN currency (the one all totals use).
+     *   mode 'convert' – every stored amount is multiplied by rate (1 old = rate new): expenses, debts,
+     *                    budgets and favourites. Foreign expenses keep their original amount.
+     *   mode 'label'   – only the currency code changes (amounts were already in that currency).
+     */
+    async changeMainCurrency(newCur, mode, rateInput) {
+      const old = this.settings.currency;
+      if (!newCur || newCur === old) return;
+      if (mode === 'label') { await this.saveSettings({ currency: newCur }); this.emit('restore'); return; }
+      const rate = typeof rateInput === 'number' ? rateInput : U.parseRate(rateInput);
+      if (!rate) throw new Error('Please enter the exchange rate.');
+      const conv = m => (m == null ? m : Math.max(1, Math.round(m * rate)));
+      const now = new Date().toISOString();
+      const exps = this.expenses.map(e => {
+        const r = Object.assign({}, e, { updatedAt: now });
+        if (e.origCurrency === newCur) {          // was a foreign expense in the new main currency → now a normal one
+          r.amountMinor = e.origAmountMinor; r.origCurrency = null; r.origAmountMinor = null; r.rate = null;
+        } else if (e.origCurrency) {               // still foreign: keep original, recompute rate against the new main currency
+          r.amountMinor = conv(e.amountMinor); r.rate = Math.round(r.amountMinor / e.origAmountMinor * 1e6) / 1e6;
+        } else {                                   // normal expense: it was in the old main currency → remember that
+          r.amountMinor = conv(e.amountMinor); r.origCurrency = old; r.origAmountMinor = e.amountMinor; r.rate = rate;
+        }
+        return r;
+      });
+      const debts = this.debts.map(d => {
+        const r = Object.assign({}, d, { amountMinor: conv(d.amountMinor), updatedAt: now,
+          payments: (d.payments || []).map(p => Object.assign({}, p, { amountMinor: conv(p.amountMinor) })) });
+        // Rounding each repayment separately must not leave a fully repaid loan with 0.01 open.
+        if (this.debtLeft(d) === 0 && r.payments.length) {
+          const diff = r.amountMinor - r.payments.reduce((a, p) => a + p.amountMinor, 0);
+          r.payments[r.payments.length - 1].amountMinor += diff;
+        }
+        return r;
+      });
+      const s = this.settings;
+      const monthly = Object.fromEntries(Object.entries(s.monthlyBudgets || {}).map(([k, v]) => [k, conv(v)]));
+      const favourites = (s.favourites || []).map(f => Object.assign({}, f, { amountMinor: conv(f.amountMinor) }));
+      await App.storage.putMany('expenses', exps);
+      await App.storage.putMany('debts', debts);
+      this.expenses = exps; this.debts = debts;
+      await this.saveSettings({ currency: newCur, monthlyBudgets: monthly, defaultBudget: s.defaultBudget ? conv(s.defaultBudget) : s.defaultBudget, favourites });
+      this.emit('restore');
     },
 
     async addExpense(input) {

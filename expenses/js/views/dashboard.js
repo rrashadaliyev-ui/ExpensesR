@@ -76,7 +76,7 @@
       (recent.length ? '<ul class="tx-list">' + recent.map(e => '<li data-id="' + e.id + '" tabindex="0">' +
         '<span class="tx-icon" style="--c:' + D.catColor(e.categoryId) + '">' + U.esc(D.catIcon(e.subcategoryId || e.categoryId)) + '</span>' +
         '<span class="tx-main"><b>' + U.esc(e.title) + '</b><small>' + U.esc(D.catName(e.categoryId) + (e.subcategoryId ? ' › ' + D.catName(e.subcategoryId) : '')) + ' · ' + U.esc(U.fmtDate(e.date)) + '</small></span>' +
-        '<span class="tx-amt">' + U.money(e.amountMinor) + '</span></li>').join('') + '</ul>'
+        '<span class="tx-amt">' + UI.amountHtml(e) + '</span></li>').join('') + '</ul>'
         : '<div class="empty"><p>No expenses yet.</p><button class="btn primary" data-add>Add your first expense</button><p class="muted small">or load sample data in <a href="#/settings">Settings</a> to explore.</p></div>') +
       '</section>';
 
