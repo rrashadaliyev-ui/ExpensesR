@@ -47,6 +47,7 @@
       kpi('This week', week.total, week.count, change(week.total, lastWeek.total)) +
       kpi('This month', month.total, month.count, change(month.total, lastMonth.total)) +
       '</section>' +
+      budgetCard(month.total) +
 
       '<section class="card"><div class="card-head"><h2>Analysis period</h2><div data-pp></div></div>' +
       '<div class="summary-row">' +
@@ -77,6 +78,8 @@
       '</section>';
 
     UI.periodPicker(UI.$('[data-pp]', root), state.period, p => { state.period = p; render(root); });
+    const bc = UI.$('.budget-card', root);
+    if (bc) bc.addEventListener('click', () => { location.hash = '#/budget'; });
     UI.$$('[data-add]', root).forEach(b => b.addEventListener('click', () => UI.expenseForm()));
     UI.$$('.tx-list li', root).forEach(li => {
       li.addEventListener('click', () => UI.expenseDetails(li.dataset.id));
@@ -89,6 +92,20 @@
       UI.$('[data-unit]', root).textContent = { day: 'per day', week: 'per week', month: 'per month', year: 'per year' }[unit];
       UI.trend(UI.$('[data-trend]', root), C.series(list, unit, range.from, range.to), { type: unit === 'day' && (range.from ? U.daysBetween(range.from, range.to) > 14 : true) ? 'line' : 'bar' });
     }
+  }
+
+  // "X left of Y" card for the current month's budget (or a prompt to set one).
+  function budgetCard(spent) {
+    const m = U.today().slice(0, 7);
+    const budget = App.data.budgetFor(m);
+    if (budget == null) return '<section class="card kpi budget-card" tabindex="0"><div class="kpi-label">Monthly budget</div><div class="kpi-sub">No budget set for this month. <a href="#/budget">Set your monthly budget →</a></div></section>';
+    const left = budget - spent, pct = spent / budget * 100;
+    const status = left < 0 ? 'over' : pct >= 80 ? 'warn' : 'ok';
+    const daysLeft = U.daysBetween(U.today(), U.endOfMonth(U.today())) + 1;
+    return '<section class="card kpi budget-card" tabindex="0"><div class="kpi-label">Monthly budget · ' + U.esc(U.monthName(m + '-01')) + '</div>' +
+      '<div class="kpi-value budget-' + status + '">' + (left < 0 ? U.money(-left) + ' over budget' : U.money(left) + ' left') + '</div>' +
+      '<div class="kpi-sub">Spent ' + U.money(spent) + ' of ' + U.money(budget) + ' (' + U.fmtPct(pct) + ')' + (left > 0 ? ' · ' + U.money(Math.floor(left / daysLeft)) + ' per day for ' + daysLeft + ' days' : '') + '</div>' +
+      '<div class="budget-bar ' + status + '"><span style="width:' + Math.min(100, pct).toFixed(1) + '%"></span></div></section>';
   }
 
   function empty() { return '<div class="empty small"><p class="muted">No expenses in this period.</p></div>'; }

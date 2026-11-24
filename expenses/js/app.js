@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const UI = App.ui;
-  const ROUTES = ['dashboard', 'expenses', 'breakdown', 'reports', 'categories', 'settings'];
+  const ROUTES = ['dashboard', 'expenses', 'budget', 'breakdown', 'reports', 'categories', 'settings'];
   let current = null;
 
   function route() {
@@ -22,7 +22,8 @@
     const y = window.scrollY;
     current = name;
     UI.$$('.nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#/' + name));
-    document.title = view.title + ' · Expense Manager';
+    const t = App.i18n.t;
+    document.title = t(view.title) + ' · ' + t('Expense Manager');
     try { view.render(root); }
     catch (e) { console.error(e); root.innerHTML = '<div class="card"><h2>Something went wrong</h2><pre>' + App.U.esc(e.stack || e.message) + '</pre></div>'; }
     if (sameView) window.scrollTo(0, y); else window.scrollTo(0, 0);
@@ -49,6 +50,7 @@
     view.innerHTML = '<div class="login card"><div class="logo big">₼</div><h1>Expense Manager</h1>' +
       '<p class="muted">Sign in with your Google account. Your expenses are saved in your account and synced across your phone and computer.</p>' +
       '<button class="btn primary google-btn" data-signin>Sign in with Google</button>' +
+      '<div class="lang-switch center-row"><button class="chip" data-lang="en">English</button><button class="chip" data-lang="az">Azərbaycan</button></div>' +
       '<div class="form-error" hidden>' + App.U.esc(S.lastError || '') + '</div></div>';
     const err = view.querySelector('.form-error');
     if (S.lastError) err.hidden = false;
@@ -60,7 +62,18 @@
     return false;
   }
 
+  // Language buttons (sidebar + sign-in screen). Delegated so buttons added later also work.
+  function wireLanguage() {
+    document.addEventListener('click', e => {
+      const b = e.target.closest && e.target.closest('[data-lang]');
+      if (b && b.dataset.lang !== App.i18n.lang) App.i18n.set(b.dataset.lang);
+    });
+    const mark = () => UI.$$('[data-lang]').forEach(b => b.classList.toggle('on', b.dataset.lang === App.i18n.lang));
+    mark(); new MutationObserver(mark).observe(document.body, { childList: true, subtree: true });
+  }
+
   async function start() {
+    wireLanguage();
     if (!(await ensureSignedIn())) return;
     try {
       await App.data.load();
@@ -69,6 +82,9 @@
         '</p><p class="muted">Private/incognito windows and some browser settings block storage. Open this app in a normal Chrome, Edge or Firefox window.</p></div>';
       return;
     }
+    // Use the language saved in settings (e.g. chosen on another device) if this device has no choice yet.
+    const savedLang = App.data.settings.lang;
+    if (savedLang && !App.i18n.hasLocal && savedLang !== App.i18n.lang) { App.i18n.set(savedLang); return; }
     // Ask the browser not to evict our data under storage pressure.
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
@@ -76,6 +92,7 @@
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { applyTheme(); render(); });
     App.data.on(reason => { if (reason === 'settings' || reason === 'restore') applyTheme(); render(); });
     window.addEventListener('hashchange', render);
+    window.addEventListener('storage-error', e => UI.toast(e.detail, 'err'));
     // Cloud mode: pick up changes made on other devices when the app comes back to the foreground.
     if (App.storage.requiresAuth) {
       const sync = () => { if (document.visibilityState === 'visible' && !document.querySelector('.modal-backdrop')) App.data.reload().catch(() => {}); };

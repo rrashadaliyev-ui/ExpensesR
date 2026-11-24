@@ -32,12 +32,16 @@
     <nav class="nav">
       <a href="#/dashboard"><span class="ni">📊</span>Dashboard</a>
       <a href="#/expenses"><span class="ni">🧾</span>Expenses</a>
+      <a href="#/budget"><span class="ni">🐷</span>Budget &amp; Savings</a>
       <a href="#/breakdown"><span class="ni">🧮</span>Breakdown</a>
       <a href="#/reports"><span class="ni">📈</span>Reports</a>
       <a href="#/categories"><span class="ni">🏷️</span>Categories</a>
       <a href="#/settings"><span class="ni">⚙️</span>Settings &amp; data</a>
     </nav>
-    <p class="sidebar-foot muted small">Tip: press <kbd>N</kbd> to add an expense</p>
+    <div class="sidebar-foot">
+      <div class="lang-switch" role="group" aria-label="Language"><button class="chip" data-lang="en">English</button><button class="chip" data-lang="az">Azərbaycan</button></div>
+      <p class="muted small">Tip: press <kbd>N</kbd> to add an expense</p>
+    </div>
   </aside>
   <div id="nav-scrim"></div>
 
@@ -52,6 +56,7 @@
 
   <!-- App (order matters) -->
   <script src="js/utils.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/firebase-config.js"></script>
   <script src="js/storage-firebase.js"></script>
@@ -60,6 +65,7 @@
   <script src="js/ui.js"></script>
   <script src="js/views/dashboard.js"></script>
   <script src="js/views/expenses.js"></script>
+  <script src="js/views/budget.js"></script>
   <script src="js/views/breakdown.js"></script>
   <script src="js/views/reports.js"></script>
   <script src="js/views/categories.js"></script>

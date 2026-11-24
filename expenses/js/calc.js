@@ -169,8 +169,8 @@
   C.bucketLabel = function (key, unit) {
     switch (unit) {
       case 'day': return U.fmtDate(key, { day: 'numeric', month: 'short' });
-      case 'week': return 'Wk of ' + U.fmtDate(key, { day: 'numeric', month: 'short' });
-      case 'month': return U.parseDate(key + '-01').toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+      case 'week': return App.i18n.t('Wk of ' + U.fmtDate(key, { day: 'numeric', month: 'short' })); // also used on charts (canvas), so translate here
+      case 'month': return U.fmtDate(key + '-01', { month: 'short', year: 'numeric' });
       default: return key;
     }
   };

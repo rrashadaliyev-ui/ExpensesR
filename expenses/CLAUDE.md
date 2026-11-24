@@ -15,6 +15,15 @@ A plain HTML/CSS/JS app with no build step and no framework. Classic `<script>` 
 | `js/views/*.js` (`App.views.<name>`) | One page each: `{ title, render(root) }`. Views keep their filter state in a module-level `state` object |
 | `js/app.js` | Hash router (`#/dashboard` …), theme, re-renders the current view on every data `emit` |
 
+## Budget & languages
+
+- **Budget & Savings** (`js/views/budget.js`, `App.data.budgetFor/setBudget`): budgets live in settings: `monthlyBudgets {"YYYY-MM": minor}` for one-month overrides, `defaultBudget` + `defaultBudgetFrom` for "every month from X". Saved per month = budget − spent. Total savings counts finished months only.
+- **Languages** (`js/i18n.js`): the UI is written in English. In Azerbaijani mode a MutationObserver translates every on-screen text node and the placeholder/title/aria-label attributes, using the `AZ` dictionary (exact phrases) and `PATTERNS` (phrases with numbers). **When you add UI text, add its Azerbaijani translation to `AZ`.** Text drawn on charts (canvas) must go through `App.i18n.t()`. Azerbaijani dates and amounts are formatted by hand in `utils.js` (`fmtAz`, `money`), because browsers' Azerbaijani locale data is unreliable.
+
+## Deployment
+
+The live site is GitHub Pages: repository `rrashadaliyev-ui/ExpensesR`, with the app in the **`expenses/` subfolder** (URL `https://rrashadaliyev-ui.github.io/ExpensesR/expenses/`). Firebase project `expenses-2a6dc`. To deploy, upload the changed files into `ExpensesR/expenses/` on GitHub.
+
 ## Data model (schema v1)
 
 - **Category** `{ id, name, parentId|null, color, icon, archived, archivedAt, createdAt, updatedAt }`. A subcategory is a category with `parentId`. Only 2 levels.

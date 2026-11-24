@@ -17,6 +17,19 @@
   const SDK = '10.12.2';
   const SCRIPTS = ['app', 'auth', 'firestore'].map(n => 'https://www.gstatic.com/firebasejs/' + SDK + '/firebase-' + n + '-compat.js');
   const BATCH = 400; // Firestore allows max 500 writes per batch
+  const ACK_WAIT = 2500; // ms to wait for the server before carrying on
+
+  /*
+   * Firestore applies a write to its local cache immediately, but the returned promise only
+   * resolves when Google's server confirms it. On a slow or offline connection that can take
+   * very long and the app looked frozen ("nothing happens when I tap Create").
+   * So: wait briefly for the server, then continue; if the server later REJECTS the write,
+   * show an error via the "storage-error" event (app.js turns it into a red message).
+   */
+  function confirmed(promise) {
+    promise.catch(e => window.dispatchEvent(new CustomEvent('storage-error', { detail: friendly(e) })));
+    return Promise.race([promise, new Promise(r => setTimeout(r, ACK_WAIT))]);
+  }
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -81,23 +94,23 @@
       return snap.docs.map(d => d.data());
     }
 
-    async put(store, record) { await this.col(store).doc(record.id).set(record); return record; }
+    async put(store, record) { await confirmed(this.col(store).doc(record.id).set(record)); return record; }
 
     async putMany(store, records) {
       for (let i = 0; i < records.length; i += BATCH) {
         const b = this.db.batch();
         records.slice(i, i + BATCH).forEach(r => b.set(this.col(store).doc(r.id), r));
-        await b.commit();
+        await confirmed(b.commit());
       }
     }
 
-    async remove(store, id) { await this.col(store).doc(id).delete(); }
+    async remove(store, id) { await confirmed(this.col(store).doc(id).delete()); }
 
     async removeMany(store, ids) {
       for (let i = 0; i < ids.length; i += BATCH) {
         const b = this.db.batch();
         ids.slice(i, i + BATCH).forEach(id => b.delete(this.col(store).doc(id)));
-        await b.commit();
+        await confirmed(b.commit());
       }
     }
 
@@ -116,7 +129,9 @@
     const map = {
       'auth/unauthorized-domain': 'This web address is not allowed to sign in yet. In Firebase console → Authentication → Settings → Authorized domains, add this domain: ' + location.hostname,
       'auth/operation-not-allowed': 'Google sign-in is not enabled. In Firebase console → Authentication → Sign-in method, enable Google.',
-      'auth/network-request-failed': 'No internet connection. Connect and try again.'
+      'auth/network-request-failed': 'No internet connection. Connect and try again.',
+      'permission-denied': 'Google refused to save this change (permission denied). Sign out and sign in again; if it continues, check the Firestore security rules in SETUP-CLOUD.md.',
+      'unavailable': 'Cannot reach Google right now. Your change is kept on this device and will upload when the connection is back.'
     };
     return map[e.code] || e.message || String(e);
   }

@@ -43,12 +43,39 @@
   U.endOfYear = s => s.slice(0, 4) + '-12-31';
   U.daysBetween = (a, b) => Math.round((U.parseDate(b) - U.parseDate(a)) / 86400000);
 
+  /*
+   * Date display. English uses the browser's own formatting. Azerbaijani is formatted here by hand,
+   * because many browsers ship without full Azerbaijani date data (they showed e.g. "2026 M11 1").
+   * opts uses the same keys as toLocaleDateString: day, month ('short'|'long'), year ('numeric'|'2-digit'), weekday.
+   */
+  const AZ_MONTHS = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'İyun', 'İyul', 'Avqust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'];
+  const AZ_MONTHS_SHORT = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'İyn', 'İyl', 'Avq', 'Sen', 'Okt', 'Noy', 'Dek'];
+  const AZ_DAYS = ['Bazar', 'Bazar ertəsi', 'Çərşənbə axşamı', 'Çərşənbə', 'Cümə axşamı', 'Cümə', 'Şənbə'];
+  const AZ_DAYS_SHORT = ['B.', 'B.e.', 'Ç.a.', 'Ç.', 'C.a.', 'C.', 'Ş.'];
+  const isAz = () => !!(App.i18n && App.i18n.lang === 'az');
+  U.loc = () => undefined; // browser default locale for English formatting
+
+  function fmtAz(d, o) {
+    const parts = [];
+    if (o.weekday) parts.push((o.weekday === 'long' ? AZ_DAYS : AZ_DAYS_SHORT)[d.getDay()] + ',');
+    if (o.day) parts.push(String(d.getDate()));
+    if (o.month) parts.push((o.month === 'long' ? AZ_MONTHS : AZ_MONTHS_SHORT)[d.getMonth()]);
+    if (o.year) parts.push(o.year === '2-digit' ? "'" + String(d.getFullYear()).slice(2) : String(d.getFullYear()));
+    return parts.join(' ');
+  }
   U.fmtDate = (s, opts) => {
     if (!s) return '';
-    return U.parseDate(s).toLocaleDateString(undefined, opts || { day: 'numeric', month: 'short', year: 'numeric' });
+    const o = opts || { day: 'numeric', month: 'short', year: 'numeric' };
+    const d = U.parseDate(s);
+    return isAz() ? fmtAz(d, o) : d.toLocaleDateString(undefined, o);
   };
-  U.fmtDateTime = iso => iso ? new Date(iso).toLocaleString() : '';
-  U.monthName = s => U.parseDate(s).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  U.fmtDateTime = iso => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (!isAz()) return d.toLocaleString();
+    return fmtAz(d, { day: 1, month: 'long', year: 1 }) + ', ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  U.monthName = s => U.fmtDate(s, { month: 'long', year: 'numeric' });
 
   /* ---------- Money ---------- */
   U.MAX_AMOUNT_MINOR = 100000000000; // 1,000,000,000.00
@@ -77,14 +104,22 @@
   U.minorToNumber = m => Math.round(m) / 100;
 
   let moneyFmt = null, moneyFmtKey = '';
+  const plain = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const SYMBOLS = { AZN: '₼', USD: '$', EUR: '€', GBP: '£', TRY: '₺', RUB: '₽' };
   U.money = function (minor) {
     const cur = (App.data && App.data.settings && App.data.settings.currency) || 'USD';
+    const v = (minor || 0) / 100;
+    if (isAz()) {
+      // Azerbaijani style: 1 300,50 ₼  (space between thousands, comma for decimals, symbol after)
+      const s = plain.format(Math.abs(v)).replace(/,/g, ' ').replace('.', ',');
+      return (v < 0 ? '−' : '') + s + ' ' + (SYMBOLS[cur] || cur);
+    }
     if (moneyFmtKey !== cur) {
       try { moneyFmt = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur }); }
       catch (e) { moneyFmt = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
       moneyFmtKey = cur;
     }
-    return moneyFmt.format((minor || 0) / 100);
+    return moneyFmt.format(v);
   };
   U.pct = (part, whole) => whole ? (part / whole * 100) : 0;
   U.fmtPct = v => (Math.round(v * 10) / 10).toFixed(1) + '%';

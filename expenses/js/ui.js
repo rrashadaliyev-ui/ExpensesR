@@ -289,7 +289,7 @@
     const accent = css.getPropertyValue('--accent').trim();
     return UI.chart(canvas, {
       type: opts.type || 'bar',
-      data: { labels: series.map(s => s.label), datasets: [{ label: opts.label || 'Spent', data: series.map(s => U.minorToNumber(s.total)),
+      data: { labels: series.map(s => s.label), datasets: [{ label: App.i18n.t(opts.label || 'Spent'), data: series.map(s => U.minorToNumber(s.total)),
         backgroundColor: opts.type === 'line' ? U.alpha(accent, 0.15) : accent, borderColor: accent, fill: true, tension: 0.3, pointRadius: series.length > 60 ? 0 : 3, borderRadius: 4, maxBarThickness: 36 }] },
       options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + U.money(Math.round(ctx.parsed.y * 100)) } } },
         scales: { y: { beginAtZero: true, ticks: { callback: UI.moneyTick } }, x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } } } }

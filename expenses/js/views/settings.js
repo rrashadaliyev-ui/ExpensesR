@@ -11,6 +11,7 @@
       '<div class="page-head"><div><h1>Settings & data</h1><p class="muted">Preferences, backup, restore and import</p></div></div>' +
 
       '<section class="card"><h2>Preferences</h2><div class="settings-grid">' +
+      '<div class="field"><label for="s-lang">Language</label><select id="s-lang"><option value="en">English</option><option value="az">Azərbaycan dili</option></select></div>' +
       '<div class="field"><label for="s-theme">Theme</label><select id="s-theme"><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></div>' +
       '<div class="field"><label for="s-cur">Currency</label><select id="s-cur">' + CURRENCIES.concat(CURRENCIES.includes(s.currency) ? [] : [s.currency]).map(c => '<option>' + c + '</option>').join('') + '</select></div>' +
       '<div class="field"><label for="s-week">Week starts on</label><select id="s-week"><option value="1">Monday</option><option value="0">Sunday</option></select></div>' +
@@ -41,6 +42,9 @@
       '<p class="muted small center">Expense Manager · data schema v' + (s.schemaVersion || 1) + '</p>';
 
     const theme = UI.$('#s-theme', root), cur = UI.$('#s-cur', root), week = UI.$('#s-week', root);
+    const lang = UI.$('#s-lang', root);
+    lang.value = App.i18n.lang;
+    lang.addEventListener('change', () => App.i18n.set(lang.value));
     theme.value = s.theme || 'system'; cur.value = s.currency; week.value = String(s.weekStart);
     theme.addEventListener('change', () => D.saveSettings({ theme: theme.value }));
     cur.addEventListener('change', () => D.saveSettings({ currency: cur.value }));

@@ -296,6 +296,47 @@
       this.emit('settings');
     },
 
+    /* ================= Monthly budget ================= *
+     * settings.monthlyBudgets      { "YYYY-MM": amountMinor }  – budget set for one specific month
+     * settings.defaultBudget       amountMinor | null           – applies to every month from defaultBudgetFrom onwards
+     * settings.defaultBudgetFrom   "YYYY-MM"                    – first month the default applies to
+     *   (so past months that never had a budget don't show fake "savings")
+     */
+    budgetFor(month) {
+      const s = this.settings;
+      const one = s.monthlyBudgets && s.monthlyBudgets[month];
+      if (one != null) return one;
+      if (s.defaultBudget && s.defaultBudgetFrom && month >= s.defaultBudgetFrom) return s.defaultBudget;
+      return null;
+    },
+
+    // scope: 'month' = only this month, 'onwards' = this month and every month after it
+    async setBudget(month, amountInput, scope) {
+      if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid month.');
+      let minor = null;
+      if (String(amountInput == null ? '' : amountInput).trim() !== '') {
+        const p = U.parseAmount(amountInput);
+        if (!p.ok) throw new Error(p.error);
+        minor = p.value;
+      }
+      const monthly = Object.assign({}, this.settings.monthlyBudgets || {});
+      const patch = {};
+      if (scope === 'onwards') {
+        // Keep earlier months exactly as they were by freezing their current budget.
+        const oldFrom = this.settings.defaultBudgetFrom, oldDef = this.settings.defaultBudget;
+        if (oldDef && oldFrom && oldFrom < month) {
+          for (let m = oldFrom; m < month; m = U.addMonths(m + '-01', 1).slice(0, 7)) if (monthly[m] == null) monthly[m] = oldDef;
+        }
+        Object.keys(monthly).forEach(m => { if (m >= month) delete monthly[m]; });
+        patch.defaultBudget = minor;
+        patch.defaultBudgetFrom = minor ? month : null;
+      } else {
+        if (minor == null) delete monthly[month]; else monthly[month] = minor;
+      }
+      patch.monthlyBudgets = monthly;
+      await this.saveSettings(patch);
+    },
+
     /* ================= Backup / Restore ================= */
 
     backupObject() {
