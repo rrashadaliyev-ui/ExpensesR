@@ -63,7 +63,7 @@
       const ids = Array.from(state.selected);
       const sum = C.sum(ids.map(id => D.expense(id)).filter(Boolean));
       if (await UI.confirm({ title: 'Delete ' + ids.length + ' expenses?', message: 'This permanently deletes <b>' + ids.length + '</b> selected expenses totalling <b>' + U.money(sum) + '</b>. This cannot be undone. Tip: make a backup in Settings first.', okText: 'Delete ' + ids.length, danger: true })) {
-        await D.deleteExpenses(ids); state.selected.clear(); UI.toast(ids.length + ' expenses deleted');
+        state.selected.clear(); await UI.deleteWithUndo(ids);
       }
     });
     UI.$('[data-bulk-move]', root).addEventListener('click', () => moveDialog(Array.from(state.selected)));
@@ -120,7 +120,7 @@
       UI.$('[data-del]', tr).addEventListener('click', async () => {
         const e = D.expense(id);
         if (await UI.confirm({ title: 'Delete expense?', message: 'Delete <b>' + U.esc(e.title) + '</b> (' + U.money(e.amountMinor) + ', ' + U.esc(U.fmtDate(e.date)) + ')? This cannot be undone.', okText: 'Delete', danger: true })) {
-          await D.deleteExpenses([id]); state.selected.delete(id); UI.toast('Expense deleted');
+          state.selected.delete(id); await UI.deleteWithUndo([id]);
         }
       });
     });

@@ -13,11 +13,31 @@
   UI.h = function (html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
   /* ---------------- Toast ---------------- */
-  UI.toast = function (msg, type) {
-    const el = UI.h('<div class="toast ' + (type || 'ok') + '" role="status">' + U.esc(msg) + '</div>');
+  // action (optional) = { label: 'Undo', fn: () => ... } shows a button inside the message.
+  UI.toast = function (msg, type, action) {
+    const el = UI.h('<div class="toast ' + (type || 'ok') + '" role="status"><span>' + U.esc(msg) + '</span></div>');
+    const life = action ? 6000 : (type === 'err' ? 5000 : 2800);
+    if (action) {
+      const b = UI.h('<button class="toast-btn">' + U.esc(action.label) + '</button>');
+      b.addEventListener('click', () => { el.remove(); action.fn(); });
+      el.appendChild(b);
+    }
     $('#toasts').appendChild(el);
-    setTimeout(() => el.classList.add('hide'), 2800);
-    setTimeout(() => el.remove(), 3200);
+    setTimeout(() => el.classList.add('hide'), life);
+    setTimeout(() => el.remove(), life + 400);
+  };
+
+  // Delete expenses with a 6-second Undo (re-saves the exact same records, same ids and dates).
+  UI.deleteWithUndo = async function (ids) {
+    const D = App.data;
+    const copies = ids.map(id => D.expense(id)).filter(Boolean).map(e => Object.assign({}, e));
+    await D.deleteExpenses(ids);
+    UI.toast(copies.length === 1 ? 'Expense deleted' : copies.length + ' expenses deleted', 'ok', { label: 'Undo', fn: async () => {
+      await App.storage.putMany('expenses', copies);
+      D.expenses = D.expenses.concat(copies.filter(c => !D.expense(c.id)));
+      D.emit('expenses');
+      UI.toast('Restored');
+    } });
   };
 
   /* ---------------- Modal ---------------- */
@@ -162,6 +182,7 @@
       '<div class="field"><span class="label">Payment method</span><div class="segmented" role="radiogroup" aria-label="Payment method">' +
       D.PAYMENT_METHODS.map(m => '<label><input type="radio" name="paymentMethod" value="' + m + '"><span>' + m + '</span></label>').join('') + '</div></div>' +
       '<div class="field"><label for="f-notes">Notes <span class="muted">(optional)</span></label><textarea id="f-notes" name="notes" rows="2" maxlength="1000"></textarea></div>' +
+      (isEdit ? '' : '<label class="check-row"><input type="checkbox" name="fav"> <span>⭐ Also save as a quick-add favourite</span></label>') +
       '<div class="form-error" role="alert" hidden></div>' +
       (isEdit ? '<p class="muted small">Created ' + U.esc(U.fmtDateTime(existing.createdAt)) + (existing.updatedAt !== existing.createdAt ? ' · Last edited ' + U.esc(U.fmtDateTime(existing.updatedAt)) : '') + '</p>' : '') +
       '</form>');
@@ -197,7 +218,10 @@
       saving = true; UI.$$('button', footer).forEach(b => { b.disabled = true; });
       try {
         if (isEdit) await D.updateExpense(existing.id, input);
-        else await D.addExpense(input);
+        else {
+          const rec = await D.addExpense(input);
+          if (f.fav && f.fav.checked) { await D.addFavourite(rec); f.fav.checked = false; }
+        }
         D.saveSettings({ lastCategoryId: input.categoryId, lastPaymentMethod: input.paymentMethod }).catch(() => {});
         UI.toast(isEdit ? 'Expense updated' : 'Expense saved: ' + U.money(U.parseAmount(input.amount).value));
         if (again) {
@@ -215,7 +239,7 @@
     const del = $('[data-del]', footer);
     if (del) del.addEventListener('click', async () => {
       if (await UI.confirm({ title: 'Delete expense?', message: 'Delete <b>' + U.esc(existing.title) + '</b> (' + U.money(existing.amountMinor) + ')? This cannot be undone.', okText: 'Delete', danger: true })) {
-        await D.deleteExpenses([existing.id]); UI.toast('Expense deleted'); m.close();
+        m.close(); await UI.deleteWithUndo([existing.id]);
       }
     });
     return m;
@@ -237,7 +261,11 @@
     const m = UI.modal({
       title: e.title,
       body: '<dl class="details">' + rows.map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>',
-      footer: '<button class="btn ghost" data-close>Close</button><button class="btn primary" data-edit>Edit</button>'
+      footer: '<button class="btn ghost" data-fav>⭐ Add to favourites</button><span class="spacer"></span><button class="btn ghost" data-close>Close</button><button class="btn primary" data-edit>Edit</button>'
+    });
+    $('[data-fav]', m.el).addEventListener('click', async () => {
+      try { const added = await D.addFavourite(e); UI.toast(added ? 'Added to favourites' : 'Already in favourites'); }
+      catch (err) { UI.toast(err.message, 'err'); }
     });
     $('[data-edit]', m.el).addEventListener('click', () => { m.close(); UI.expenseForm(e); });
   };

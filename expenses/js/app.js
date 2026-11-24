@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const UI = App.ui;
-  const ROUTES = ['dashboard', 'expenses', 'budget', 'breakdown', 'reports', 'categories', 'settings'];
+  const ROUTES = ['dashboard', 'expenses', 'budget', 'debts', 'breakdown', 'reports', 'categories', 'settings'];
   let current = null;
 
   function route() {
@@ -21,7 +21,9 @@
     const sameView = current === name;
     const y = window.scrollY;
     current = name;
-    UI.$$('.nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#/' + name));
+    UI.$$('.nav a, .tabbar a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#/' + name));
+    const more = document.querySelector('.tabbar [data-more]');
+    if (more) more.classList.toggle('on', !['dashboard', 'expenses', 'budget'].includes(name));
     const t = App.i18n.t;
     document.title = t(view.title) + ' · ' + t('Expense Manager');
     try { view.render(root); }
@@ -72,7 +74,14 @@
     mark(); new MutationObserver(mark).observe(document.body, { childList: true, subtree: true });
   }
 
+  // Offline support + "Add to Home Screen" (only on https or localhost).
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost')) return;
+    navigator.serviceWorker.register('sw.js').catch(() => { /* app works without it */ });
+  }
+
   async function start() {
+    registerServiceWorker();
     wireLanguage();
     if (!(await ensureSignedIn())) return;
     try {
@@ -105,6 +114,7 @@
     });
     UI.$$('[data-global-add]').forEach(b => b.addEventListener('click', () => UI.expenseForm()));
     document.getElementById('menu-toggle').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+    document.querySelector('.tabbar [data-more]').addEventListener('click', () => document.body.classList.toggle('nav-open'));
     document.getElementById('nav-scrim').addEventListener('click', () => document.body.classList.remove('nav-open'));
     // Keyboard shortcut: "n" adds an expense (when not typing in a field and no dialog is open).
     document.addEventListener('keydown', e => {

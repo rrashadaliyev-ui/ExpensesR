@@ -42,6 +42,7 @@
     PAYMENT_METHODS, PALETTE, ICONS,
     expenses: [],
     categories: [],
+    debts: [],
     settings: Object.assign({}, DEFAULT_SETTINGS),
     catById: new Map(),
 
@@ -50,11 +51,12 @@
 
     async load() {
       await App.storage.init();
-      const [expenses, categories, settings] = await Promise.all([
-        App.storage.getAll('expenses'), App.storage.getAll('categories'), App.storage.getAll('settings')
+      const [expenses, categories, settings, debts] = await Promise.all([
+        App.storage.getAll('expenses'), App.storage.getAll('categories'), App.storage.getAll('settings'), App.storage.getAll('debts')
       ]);
       this.expenses = expenses;
       this.categories = categories;
+      this.debts = debts;
       this.settings = Object.assign({}, DEFAULT_SETTINGS, settings.find(s => s.id === 'app') || {});
       this.reindex();
       if (!settings.length && !categories.length && !expenses.length) {
@@ -65,13 +67,15 @@
 
     // Re-read everything from storage (used to pick up changes made on another device).
     async reload() {
-      const [expenses, categories, settings] = await Promise.all([
-        App.storage.getAll('expenses'), App.storage.getAll('categories'), App.storage.getAll('settings')
+      const [expenses, categories, settings, debts] = await Promise.all([
+        App.storage.getAll('expenses'), App.storage.getAll('categories'), App.storage.getAll('settings'), App.storage.getAll('debts')
       ]);
       const sig = l => l.length + ':' + l.reduce((m, r) => (r.updatedAt || '') > m ? r.updatedAt : m, '');
-      const changed = sig(expenses) !== sig(this.expenses) || sig(categories) !== sig(this.categories);
-      this.expenses = expenses; this.categories = categories;
-      this.settings = Object.assign({}, DEFAULT_SETTINGS, settings.find(s => s.id === 'app') || {});
+      const newSettings = Object.assign({}, DEFAULT_SETTINGS, settings.find(s => s.id === 'app') || {});
+      const changed = sig(expenses) !== sig(this.expenses) || sig(categories) !== sig(this.categories) ||
+        sig(debts) !== sig(this.debts) || JSON.stringify(newSettings) !== JSON.stringify(this.settings);
+      this.expenses = expenses; this.categories = categories; this.debts = debts;
+      this.settings = newSettings;
       this.reindex();
       if (changed) this.emit('sync');
     },
@@ -337,12 +341,106 @@
       await this.saveSettings(patch);
     },
 
+    /* ================= Quick-add favourites ================= *
+     * settings.favourites = [{ id, title, amountMinor, categoryId, subcategoryId, paymentMethod }]
+     */
+    favourites() {
+      return (this.settings.favourites || []).filter(f => { const c = this.cat(f.categoryId); return c && !c.archived; });
+    },
+    async addFavourite(src) {
+      const list = (this.settings.favourites || []).slice();
+      const same = f => U.norm(f.title) === U.norm(src.title) && f.amountMinor === src.amountMinor && f.categoryId === src.categoryId && (f.subcategoryId || null) === (src.subcategoryId || null);
+      if (list.some(same)) return false;
+      if (list.length >= 12) throw new Error('You can have up to 12 favourites. Remove one first.');
+      list.push({ id: U.uid(), title: src.title, amountMinor: src.amountMinor, categoryId: src.categoryId, subcategoryId: src.subcategoryId || null, paymentMethod: src.paymentMethod || 'Cash' });
+      await this.saveSettings({ favourites: list });
+      return true;
+    },
+    async removeFavourite(id) {
+      await this.saveSettings({ favourites: (this.settings.favourites || []).filter(f => f.id !== id) });
+    },
+    // One tap: saves the favourite as a new expense dated today.
+    quickAdd(favId) {
+      const f = (this.settings.favourites || []).find(x => x.id === favId);
+      if (!f) throw new Error('Favourite not found.');
+      return this.addExpense({ title: f.title, amountMinor: f.amountMinor, categoryId: f.categoryId, subcategoryId: f.subcategoryId, paymentMethod: f.paymentMethod, date: U.today() });
+    },
+
+    /* ================= Borrowed & lent ================= *
+     * Debt { id, type: 'lent' (someone owes you) | 'borrowed' (you owe someone), person, amountMinor,
+     *        date, dueDate|null, note, payments: [{ id, date, amountMinor }], createdAt, updatedAt }
+     * Kept separate from expenses: lending or borrowing money is not spending.
+     */
+    debt(id) { return this.debts.find(d => d.id === id) || null; },
+    debtPaid(d) { return (d.payments || []).reduce((s, p) => s + p.amountMinor, 0); },
+    debtLeft(d) { return Math.max(0, d.amountMinor - this.debtPaid(d)); },
+    debtTotals() {
+      const open = t => this.debts.filter(d => d.type === t).reduce((s, d) => s + this.debtLeft(d), 0);
+      return { lent: open('lent'), borrowed: open('borrowed') };
+    },
+
+    async saveDebt(input) {
+      const type = input.type === 'borrowed' ? 'borrowed' : 'lent';
+      const person = String(input.person || '').trim();
+      if (!person) throw new Error('Please enter a name.');
+      if (person.length > 60) throw new Error('Name is too long (max 60 characters).');
+      let amountMinor = input.amountMinor;
+      if (amountMinor == null) { const p = U.parseAmount(input.amount); if (!p.ok) throw new Error(p.error); amountMinor = p.value; }
+      if (!U.isValidDateStr(input.date)) throw new Error('Please choose a valid date.');
+      const dueDate = input.dueDate ? (U.isValidDateStr(input.dueDate) ? input.dueDate : null) : null;
+      if (input.dueDate && !dueDate) throw new Error('Please choose a valid due date.');
+      const note = String(input.note || '').trim().slice(0, 500);
+      const now = new Date().toISOString();
+      let rec;
+      if (input.id) {
+        const old = this.debt(input.id);
+        if (!old) throw new Error('Record not found.');
+        if (amountMinor < this.debtPaid(old)) throw new Error('Amount cannot be less than what was already repaid.');
+        rec = Object.assign({}, old, { type, person, amountMinor, date: input.date, dueDate, note, updatedAt: now });
+      } else {
+        rec = { id: U.uid(), type, person, amountMinor, date: input.date, dueDate, note, payments: [], createdAt: now, updatedAt: now };
+      }
+      await App.storage.put('debts', rec);
+      upsert(this.debts, rec);
+      this.emit('debts');
+      return rec;
+    },
+
+    async addDebtPayment(id, amountInput, date) {
+      const d = this.debt(id);
+      if (!d) throw new Error('Record not found.');
+      const p = U.parseAmount(amountInput);
+      if (!p.ok) throw new Error(p.error);
+      if (p.value > this.debtLeft(d)) throw new Error('Repayment is more than what is left (' + U.money(this.debtLeft(d)) + ').');
+      if (!U.isValidDateStr(date)) throw new Error('Please choose a valid date.');
+      const rec = Object.assign({}, d, { payments: (d.payments || []).concat([{ id: U.uid(), date, amountMinor: p.value }]), updatedAt: new Date().toISOString() });
+      await App.storage.put('debts', rec);
+      upsert(this.debts, rec);
+      this.emit('debts');
+      return rec;
+    },
+
+    async removeDebtPayment(id, paymentId) {
+      const d = this.debt(id);
+      if (!d) return;
+      const rec = Object.assign({}, d, { payments: (d.payments || []).filter(p => p.id !== paymentId), updatedAt: new Date().toISOString() });
+      await App.storage.put('debts', rec);
+      upsert(this.debts, rec);
+      this.emit('debts');
+    },
+
+    async deleteDebt(id) {
+      await App.storage.remove('debts', id);
+      this.debts = this.debts.filter(d => d.id !== id);
+      this.emit('debts');
+    },
+
     /* ================= Backup / Restore ================= */
 
     backupObject() {
       return {
         app: 'expense-manager', schemaVersion: SCHEMA_VERSION, exportedAt: new Date().toISOString(),
-        stores: { expenses: this.expenses, categories: this.categories, settings: [this.settings] }
+        stores: { expenses: this.expenses, categories: this.categories, settings: [this.settings], debts: this.debts }
       };
     },
 
@@ -357,16 +455,18 @@
           throw new Error('Backup contains an invalid expense (id ' + (e.id || '?') + ').');
       }
       const settings = [Object.assign({}, DEFAULT_SETTINGS, (obj.stores.settings || [])[0] || {}, { id: 'app' })];
-      await App.storage.replaceAll({ stores: { expenses: exps, categories: cats, settings } });
-      this.expenses = exps; this.categories = cats; this.settings = settings[0];
+      const debts = Array.isArray(obj.stores.debts) ? obj.stores.debts : []; // older backups have no debts
+      for (const d of debts) if (!d.id || !Number.isSafeInteger(d.amountMinor)) throw new Error('Backup contains an invalid debt record.');
+      await App.storage.replaceAll({ stores: { expenses: exps, categories: cats, settings, debts } });
+      this.expenses = exps; this.categories = cats; this.settings = settings[0]; this.debts = debts;
       this.reindex();
       this.emit('restore');
       return { expenses: exps.length, categories: cats.length };
     },
 
     async clearAll() {
-      await App.storage.replaceAll({ stores: { expenses: [], categories: [], settings: [this.settings] } });
-      this.expenses = []; this.categories = []; this.reindex();
+      await App.storage.replaceAll({ stores: { expenses: [], categories: [], settings: [this.settings], debts: [] } });
+      this.expenses = []; this.categories = []; this.debts = []; this.reindex();
       await this.seedDefaultCategories();
       this.emit('restore');
     },

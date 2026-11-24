@@ -20,6 +20,12 @@ A plain HTML/CSS/JS app with no build step and no framework. Classic `<script>` 
 - **Budget & Savings** (`js/views/budget.js`, `App.data.budgetFor/setBudget`): budgets live in settings: `monthlyBudgets {"YYYY-MM": minor}` for one-month overrides, `defaultBudget` + `defaultBudgetFrom` for "every month from X". Saved per month = budget − spent. Total savings counts finished months only.
 - **Languages** (`js/i18n.js`): the UI is written in English. In Azerbaijani mode a MutationObserver translates every on-screen text node and the placeholder/title/aria-label attributes, using the `AZ` dictionary (exact phrases) and `PATTERNS` (phrases with numbers). **When you add UI text, add its Azerbaijani translation to `AZ`.** Text drawn on charts (canvas) must go through `App.i18n.t()`. Azerbaijani dates and amounts are formatted by hand in `utils.js` (`fmtAz`, `money`), because browsers' Azerbaijani locale data is unreliable.
 
+## Debts, favourites, phone app
+
+- **Borrowed & Lent** (`js/views/debts.js`): a separate store `debts` (IndexedDB v2 / Firestore collection `debts`). Records are `{ id, type: 'lent'|'borrowed', person, amountMinor, date, dueDate, note, payments[] }`, and left = amount − sum(payments). Debts are **not** expenses and never affect expense totals.
+- **Quick-add favourites**: `settings.favourites` (max 12). `App.data.quickAdd(id)` saves one as today's expense. Deleting expenses goes through `UI.deleteWithUndo` (a 6-second Undo that re-saves the same records).
+- **Phone**: the bottom `.tabbar` shows at ≤860px. PWA: `manifest.json`, `icons/` (generated with PowerShell System.Drawing), and `sw.js` (network-first for app files, cache-first for the pinned CDN libraries). **Bump `CACHE` in sw.js only if you change the caching strategy**; normal updates show up without it.
+
 ## Deployment
 
 The live site is GitHub Pages: repository `rrashadaliyev-ui/ExpensesR`, with the app in the **`expenses/` subfolder** (URL `https://rrashadaliyev-ui.github.io/ExpensesR/expenses/`). Firebase project `expenses-2a6dc`. To deploy, upload the changed files into `ExpensesR/expenses/` on GitHub.

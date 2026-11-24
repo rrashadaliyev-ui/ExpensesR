@@ -9,7 +9,11 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Expenses">
   <meta name="theme-color" content="#2563eb">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232563eb'/><text x='50' y='68' font-size='56' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>₼</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" href="icons/favicon-64.png">
+  <link rel="alternate icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232563eb'/><text x='50' y='68' font-size='56' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>₼</text></svg>">
   <script>
     // Apply saved/system theme before first paint to avoid a flash.
     (function () { var d = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches; document.documentElement.dataset.theme = d ? 'dark' : 'light'; })();
@@ -33,6 +37,7 @@
       <a href="#/dashboard"><span class="ni">📊</span>Dashboard</a>
       <a href="#/expenses"><span class="ni">🧾</span>Expenses</a>
       <a href="#/budget"><span class="ni">🐷</span>Budget &amp; Savings</a>
+      <a href="#/debts"><span class="ni">🤝</span>Borrowed &amp; Lent</a>
       <a href="#/breakdown"><span class="ni">🧮</span>Breakdown</a>
       <a href="#/reports"><span class="ni">📈</span>Reports</a>
       <a href="#/categories"><span class="ni">🏷️</span>Categories</a>
@@ -48,6 +53,14 @@
   <main id="view" class="content" tabindex="-1">
     <div class="loading">Loading…</div>
   </main>
+  <!-- Phone-only bottom navigation -->
+  <nav class="tabbar" aria-label="Quick navigation">
+    <a href="#/dashboard"><span class="ti">📊</span><small>Dashboard</small></a>
+    <a href="#/expenses"><span class="ti">🧾</span><small>Expenses</small></a>
+    <button class="tab-add" data-global-add aria-label="Add expense">＋</button>
+    <a href="#/budget"><span class="ti">🐷</span><small>Budget</small></a>
+    <button data-more><span class="ti">☰</span><small>More</small></button>
+  </nav>
   <div id="toasts" aria-live="polite"></div>
 
   <!-- Libraries (charts + Excel). The app still works offline without them; only charts and .xlsx need them. -->
@@ -66,6 +79,7 @@
   <script src="js/views/dashboard.js"></script>
   <script src="js/views/expenses.js"></script>
   <script src="js/views/budget.js"></script>
+  <script src="js/views/debts.js"></script>
   <script src="js/views/breakdown.js"></script>
   <script src="js/views/reports.js"></script>
   <script src="js/views/categories.js"></script>

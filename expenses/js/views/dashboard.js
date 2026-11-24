@@ -40,6 +40,7 @@
     root.innerHTML =
       '<div class="page-head"><div><h1>Dashboard</h1><p class="muted">Overview of your spending</p></div>' +
       '<button class="btn primary" data-add>+ Add expense</button></div>' +
+      quickRow() +
 
       '<section class="kpis">' +
       kpi('Total expenses (all time)', C.sum(all), all.length) +
@@ -47,7 +48,7 @@
       kpi('This week', week.total, week.count, change(week.total, lastWeek.total)) +
       kpi('This month', month.total, month.count, change(month.total, lastMonth.total)) +
       '</section>' +
-      budgetCard(month.total) +
+      '<div class="mini-cards">' + budgetCard(month.total) + debtCard() + '</div>' +
 
       '<section class="card"><div class="card-head"><h2>Analysis period</h2><div data-pp></div></div>' +
       '<div class="summary-row">' +
@@ -80,6 +81,21 @@
     UI.periodPicker(UI.$('[data-pp]', root), state.period, p => { state.period = p; render(root); });
     const bc = UI.$('.budget-card', root);
     if (bc) bc.addEventListener('click', () => { location.hash = '#/budget'; });
+    const dc = UI.$('.debt-card', root);
+    if (dc) dc.addEventListener('click', () => { location.hash = '#/debts'; });
+    UI.$$('[data-fav]', root).forEach(b => b.addEventListener('click', async ev => {
+      if (ev.target.closest('.x')) {
+        ev.stopPropagation();
+        await D.removeFavourite(b.dataset.fav); UI.toast('Removed from favourites'); return;
+      }
+      if (b.disabled) return;
+      b.disabled = true; // prevent double taps creating two expenses
+      try {
+        const rec = await D.quickAdd(b.dataset.fav);
+        UI.toast('Expense saved: ' + U.money(rec.amountMinor), 'ok', { label: 'Undo', fn: async () => { await D.deleteExpenses([rec.id]); UI.toast('Removed'); } });
+      } catch (e) { UI.toast(e.message, 'err'); }
+      setTimeout(() => { b.disabled = false; }, 800);
+    }));
     UI.$$('[data-add]', root).forEach(b => b.addEventListener('click', () => UI.expenseForm()));
     UI.$$('.tx-list li', root).forEach(li => {
       li.addEventListener('click', () => UI.expenseDetails(li.dataset.id));
@@ -92,6 +108,23 @@
       UI.$('[data-unit]', root).textContent = { day: 'per day', week: 'per week', month: 'per month', year: 'per year' }[unit];
       UI.trend(UI.$('[data-trend]', root), C.series(list, unit, range.from, range.to), { type: unit === 'day' && (range.from ? U.daysBetween(range.from, range.to) > 14 : true) ? 'line' : 'bar' });
     }
+  }
+
+  // One-tap buttons for favourite expenses (saved with today's date).
+  function quickRow() {
+    const D = App.data, favs = D.favourites();
+    if (!favs.length) return '<p class="muted small quick-hint">⭐ Tip: tick “Also save as a quick-add favourite” when adding an expense to get one-tap buttons here.</p>';
+    return '<div class="quick" aria-label="Quick add"><span class="quick-label">Quick add</span>' + favs.map(f =>
+      '<button class="fav" data-fav="' + f.id + '" title="' + U.esc(f.title) + '"><span>' + U.esc(D.catIcon(f.subcategoryId || f.categoryId)) + '</span><span>' + U.esc(f.title) + '</span><b>' + U.money(f.amountMinor) + '</b>' +
+      '<span class="x" role="button" aria-label="Remove from favourites" title="Remove from favourites">✕</span></button>').join('') + '</div>';
+  }
+
+  function debtCard() {
+    const D = App.data, t = D.debtTotals();
+    return '<section class="card kpi debt-card" tabindex="0"><div class="kpi-label">Borrowed &amp; Lent</div>' +
+      (t.lent || t.borrowed
+        ? '<div class="debt-sum"><span>Owed to you <b class="budget-ok">' + U.money(t.lent) + '</b></span><span>You owe <b class="budget-over">' + U.money(t.borrowed) + '</b></span></div>'
+        : '<div class="kpi-sub">No open loans. <a href="#/debts">Record money you lent or borrowed →</a></div>') + '</section>';
   }
 
   // "X left of Y" card for the current month's budget (or a prompt to set one).

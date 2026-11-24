@@ -23,8 +23,8 @@
   window.App = window.App || {};
 
   const DB_NAME = 'expense-manager';
-  const DB_VERSION = 1;
-  const STORES = ['expenses', 'categories', 'settings'];
+  const DB_VERSION = 2;
+  const STORES = ['expenses', 'categories', 'settings', 'debts'];
 
   function promisify(request) {
     return new Promise((resolve, reject) => {
@@ -51,6 +51,8 @@
             cat.createIndex('parentId', 'parentId');
             db.createObjectStore('settings', { keyPath: 'id' });
           }
+          // Version 2: money lent / borrowed
+          if (e.oldVersion < 2) db.createObjectStore('debts', { keyPath: 'id' });
         };
         req.onsuccess = () => {
           this.db = req.result;
