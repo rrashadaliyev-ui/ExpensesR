@@ -17,11 +17,15 @@
   const I = { lang: 'en', hasLocal: false };
   try { const l = localStorage.getItem('em-lang'); if (l) { I.lang = l; I.hasLocal = true; } } catch (e) { /* storage blocked */ }
   I.locale = () => (I.lang === 'az' ? 'az-Latn-AZ' : undefined);
-  I.set = function (lang) {
+  I.set = async function (lang) {
     try { localStorage.setItem('em-lang', lang); } catch (e) { /* ignore */ }
-    if (App.data && App.data.settings && App.data.settings.lang !== lang && App.data.categories) {
-      App.data.saveSettings({ lang }).catch(() => {}).finally(() => location.reload());
-    } else location.reload();
+    const D = App.data;
+    if (D && D.loaded) {
+      // Also rename the default categories (Food ⇄ Qida …) and remember the choice in synced settings.
+      try { await D.translateDefaultCategories(lang); } catch (e) { /* keep going */ }
+      try { if (D.settings.lang !== lang) await D.saveSettings({ lang }); } catch (e) { /* keep going */ }
+    }
+    location.reload();
   };
 
   const AZ = {
@@ -117,6 +121,10 @@
     '⭐ Also save as a quick-add favourite': '⭐ Həm də tez əlavə üçün seçilmişlərə saxla', '⭐ Add to favourites': '⭐ Seçilmişlərə əlavə et',
     'Added to favourites': 'Seçilmişlərə əlavə edildi', 'Already in favourites': 'Artıq seçilmişlərdədir', 'Favourite not found.': 'Seçilmiş tapılmadı.',
     'You can have up to 12 favourites. Remove one first.': 'Ən çox 12 seçilmiş ola bilər. Əvvəlcə birini silin.',
+    '🤝 Borrowed & Lent': '🤝 Borclar', 'Hide from dashboard': 'İdarə panelindən gizlət',
+    'Hidden. Show it again in Settings → Dashboard.': 'Gizlədildi. Ayarlar → İdarə paneli bölmələrindən yenidən göstərə bilərsiniz.',
+    'Dashboard panels': 'İdarə paneli bölmələri', 'Choose what to show on the Dashboard.': 'İdarə panelində nə göstəriləcəyini seçin.',
+    'Quick add buttons': 'Tez əlavə düymələri',
     'Undo': 'Geri qaytar', 'Restored': 'Bərpa edildi', 'More': 'Daha çox', 'Quick navigation': 'Sürətli keçid',
     // Breakdown
     'Each level has its own period filter, so you can compare different time ranges side by side.': 'Hər səviyyənin öz dövr filtri var – fərqli dövrləri yan-yana müqayisə edə bilərsiniz.',

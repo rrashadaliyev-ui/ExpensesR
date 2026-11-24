@@ -40,7 +40,7 @@
     root.innerHTML =
       '<div class="page-head"><div><h1>Dashboard</h1><p class="muted">Overview of your spending</p></div>' +
       '<button class="btn primary" data-add>+ Add expense</button></div>' +
-      quickRow() +
+      (isHidden('quick') ? '' : quickRow()) +
 
       '<section class="kpis">' +
       kpi('Total expenses (all time)', C.sum(all), all.length) +
@@ -48,7 +48,9 @@
       kpi('This week', week.total, week.count, change(week.total, lastWeek.total)) +
       kpi('This month', month.total, month.count, change(month.total, lastMonth.total)) +
       '</section>' +
-      '<div class="mini-cards">' + budgetCard(month.total) + debtCard() + '</div>' +
+      (isHidden('budget') && isHidden('debts') ? '' :
+        '<div class="mini-cards' + (isHidden('budget') || isHidden('debts') ? ' single' : '') + '">' +
+        (isHidden('budget') ? '' : budgetCard(month.total)) + (isHidden('debts') ? '' : debtPanel()) + '</div>') +
 
       '<section class="card"><div class="card-head"><h2>Analysis period</h2><div data-pp></div></div>' +
       '<div class="summary-row">' +
@@ -80,9 +82,15 @@
 
     UI.periodPicker(UI.$('[data-pp]', root), state.period, p => { state.period = p; render(root); });
     const bc = UI.$('.budget-card', root);
-    if (bc) bc.addEventListener('click', () => { location.hash = '#/budget'; });
-    const dc = UI.$('.debt-card', root);
-    if (dc) dc.addEventListener('click', () => { location.hash = '#/debts'; });
+    if (bc) bc.addEventListener('click', e => { if (!e.target.closest('[data-hide-panel],a')) location.hash = '#/budget'; });
+    UI.$$('[data-hide-panel]', root).forEach(b => b.addEventListener('click', async e => {
+      e.stopPropagation();
+      const key = b.dataset.hidePanel;
+      await D.saveSettings({ hiddenPanels: (D.settings.hiddenPanels || []).concat([key]) });
+      UI.toast('Hidden. Show it again in Settings → Dashboard.', 'ok', { label: 'Undo', fn: () => D.saveSettings({ hiddenPanels: (D.settings.hiddenPanels || []).filter(k => k !== key) }) });
+    }));
+    UI.$$('[data-new-debt]', root).forEach(b => b.addEventListener('click', () => App.views.debts.openDialog(null, b.dataset.newDebt)));
+    UI.$$('[data-debt]', root).forEach(li => li.addEventListener('click', () => { location.hash = '#/debts'; }));
     UI.$$('[data-fav]', root).forEach(b => b.addEventListener('click', async ev => {
       if (ev.target.closest('.x')) {
         ev.stopPropagation();
@@ -113,29 +121,43 @@
   // One-tap buttons for favourite expenses (saved with today's date).
   function quickRow() {
     const D = App.data, favs = D.favourites();
-    if (!favs.length) return '<p class="muted small quick-hint">⭐ Tip: tick “Also save as a quick-add favourite” when adding an expense to get one-tap buttons here.</p>';
-    return '<div class="quick" aria-label="Quick add"><span class="quick-label">Quick add</span>' + favs.map(f =>
+    if (!favs.length) return '<div class="quick-hint-row"><p class="muted small quick-hint">⭐ Tip: tick “Also save as a quick-add favourite” when adding an expense to get one-tap buttons here.</p>' + hideBtn('quick') + '</div>';
+    return '<div class="quick" aria-label="Quick add">' + hideBtn('quick') + '<span class="quick-label">Quick add</span>' + favs.map(f =>
       '<button class="fav" data-fav="' + f.id + '" title="' + U.esc(f.title) + '"><span>' + U.esc(D.catIcon(f.subcategoryId || f.categoryId)) + '</span><span>' + U.esc(f.title) + '</span><b>' + U.money(f.amountMinor) + '</b>' +
       '<span class="x" role="button" aria-label="Remove from favourites" title="Remove from favourites">✕</span></button>').join('') + '</div>';
   }
 
-  function debtCard() {
+  // Panels the user can hide from the dashboard (Settings → Dashboard brings them back).
+  const isHidden = key => (App.data.settings.hiddenPanels || []).includes(key);
+  const hideBtn = key => '<button class="icon-btn sm panel-hide" data-hide-panel="' + key + '" title="Hide from dashboard" aria-label="Hide from dashboard">✕</button>';
+
+  // Borrowed & lent panel: totals, open loans and buttons to add one.
+  function debtPanel() {
     const D = App.data, t = D.debtTotals();
-    return '<section class="card kpi debt-card" tabindex="0"><div class="kpi-label">Borrowed &amp; Lent</div>' +
-      (t.lent || t.borrowed
-        ? '<div class="debt-sum"><span>Owed to you <b class="budget-ok">' + U.money(t.lent) + '</b></span><span>You owe <b class="budget-over">' + U.money(t.borrowed) + '</b></span></div>'
-        : '<div class="kpi-sub">No open loans. <a href="#/debts">Record money you lent or borrowed →</a></div>') + '</section>';
+    const open = D.debts.filter(d => D.debtLeft(d) > 0)
+      .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || b.date.localeCompare(a.date)).slice(0, 4);
+    return '<section class="card debt-panel">' +
+      '<div class="card-head"><h2><a href="#/debts" class="plain-link">🤝 Borrowed &amp; Lent</a></h2>' + hideBtn('debts') + '</div>' +
+      '<div class="debt-sum"><span>Owed to you <b class="budget-ok">' + U.money(t.lent) + '</b></span><span>You owe <b class="budget-over">' + U.money(t.borrowed) + '</b></span></div>' +
+      (open.length ? '<ul class="debt-mini">' + open.map(d => {
+        const overdue = d.dueDate && d.dueDate < U.today();
+        return '<li data-debt="' + d.id + '"><span class="dot ' + d.type + '"></span><span class="who">' + U.esc(d.person) + '</span>' +
+          (d.dueDate ? '<span class="muted small ' + (overdue ? 'budget-over' : '') + '">' + (overdue ? 'Overdue since' : 'Due') + ' ' + U.esc(U.fmtDate(d.dueDate)) + '</span>' : '<span></span>') +
+          '<b class="' + (d.type === 'lent' ? 'budget-ok' : 'budget-over') + '">' + U.money(D.debtLeft(d)) + '</b></li>';
+      }).join('') + '</ul>' : '<p class="muted small">No open loans.</p>') +
+      '<div class="btn-row"><button class="btn small primary" data-new-debt="lent">+ I lent</button><button class="btn small ghost" data-new-debt="borrowed">+ I borrowed</button>' +
+      '<span class="spacer"></span><a href="#/debts" class="link">View all →</a></div></section>';
   }
 
   // "X left of Y" card for the current month's budget (or a prompt to set one).
   function budgetCard(spent) {
     const m = U.today().slice(0, 7);
     const budget = App.data.budgetFor(m);
-    if (budget == null) return '<section class="card kpi budget-card" tabindex="0"><div class="kpi-label">Monthly budget</div><div class="kpi-sub">No budget set for this month. <a href="#/budget">Set your monthly budget →</a></div></section>';
+    if (budget == null) return '<section class="card kpi budget-card" tabindex="0">' + hideBtn('budget') + '<div class="kpi-label">Monthly budget</div><div class="kpi-sub">No budget set for this month. <a href="#/budget">Set your monthly budget →</a></div></section>';
     const left = budget - spent, pct = spent / budget * 100;
     const status = left < 0 ? 'over' : pct >= 80 ? 'warn' : 'ok';
     const daysLeft = U.daysBetween(U.today(), U.endOfMonth(U.today())) + 1;
-    return '<section class="card kpi budget-card" tabindex="0"><div class="kpi-label">Monthly budget · ' + U.esc(U.monthName(m + '-01')) + '</div>' +
+    return '<section class="card kpi budget-card" tabindex="0">' + hideBtn('budget') + '<div class="kpi-label">Monthly budget · ' + U.esc(U.monthName(m + '-01')) + '</div>' +
       '<div class="kpi-value budget-' + status + '">' + (left < 0 ? U.money(-left) + ' over budget' : U.money(left) + ' left') + '</div>' +
       '<div class="kpi-sub">Spent ' + U.money(spent) + ' of ' + U.money(budget) + ' (' + U.fmtPct(pct) + ')' + (left > 0 ? ' · ' + U.money(Math.floor(left / daysLeft)) + ' per day for ' + daysLeft + ' days' : '') + '</div>' +
       '<div class="budget-bar ' + status + '"><span style="width:' + Math.min(100, pct).toFixed(1) + '%"></span></div></section>';

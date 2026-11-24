@@ -30,6 +30,17 @@
   const ICONS = ['🍔', '🛒', '🍽️', '☕', '🛵', '🚗', '⛽', '🚕', '🚌', '🏠', '💡', '💧', '🌐', '🛍️', '👕', '💻',
     '🧴', '💊', '🏥', '🎓', '🎬', '🎮', '✈️', '🏨', '🎁', '🐾', '👶', '💼', '📱', '🏋️', '💇', '🔧', '📚', '💳', '🧾', '📦'];
 
+  // Azerbaijani names of the default categories / subcategories (English → Azerbaijani).
+  const DEFAULT_NAMES_AZ = {
+    Food: 'Qida', Groceries: 'Ərzaq', Restaurants: 'Restoranlar', Coffee: 'Kofe', Delivery: 'Çatdırılma',
+    Transportation: 'Nəqliyyat', Fuel: 'Yanacaq', Taxi: 'Taksi', 'Public Transport': 'İctimai nəqliyyat',
+    Home: 'Ev', Rent: 'Kirayə', Electricity: 'Elektrik', Water: 'Su', Internet: 'İnternet',
+    Shopping: 'Alış-veriş', Clothes: 'Geyim', Electronics: 'Elektronika', 'Personal Items': 'Şəxsi əşyalar'
+  };
+  const DEFAULT_NAMES_EN = Object.fromEntries(Object.entries(DEFAULT_NAMES_AZ).map(([en, az]) => [az, en]));
+  const defaultName = (en, lang) => (lang === 'az' ? DEFAULT_NAMES_AZ[en] || en : en);
+  const curLang = () => (App.i18n && App.i18n.lang) || 'en';
+
   const DEFAULT_CATEGORIES = [
     ['Food', '🍔', ['Groceries', 'Restaurants', 'Coffee', 'Delivery']],
     ['Transportation', '🚗', ['Fuel', 'Taxi', 'Public Transport']],
@@ -63,6 +74,7 @@
         await this.seedDefaultCategories();
         await App.storage.put('settings', this.settings);
       }
+      this.loaded = true;
     },
 
     // Re-read everything from storage (used to pick up changes made on another device).
@@ -213,13 +225,36 @@
       }
     },
 
+    /*
+     * Rename the default categories into the given language ('az' or 'en').
+     * Only names that are still exactly a default name are changed – anything the user
+     * created or renamed is left alone. Expenses are linked by id, so history is unaffected.
+     */
+    async translateDefaultCategories(lang) {
+      const map = lang === 'az' ? DEFAULT_NAMES_AZ : DEFAULT_NAMES_EN;
+      const now = new Date().toISOString();
+      const changed = [];
+      this.categories.forEach(c => {
+        const target = map[c.name];
+        if (!target) return;
+        const clash = this.categories.some(x => x.id !== c.id && (x.parentId || null) === (c.parentId || null) && U.norm(x.name) === U.norm(target));
+        if (!clash) changed.push(Object.assign({}, c, { name: target, updatedAt: now }));
+      });
+      if (!changed.length) return 0;
+      await App.storage.putMany('categories', changed);
+      changed.forEach(r => upsert(this.categories, r)); this.reindex();
+      this.emit('categories');
+      return changed.length;
+    },
+
     async seedDefaultCategories() {
       const now = new Date().toISOString();
       const recs = [];
+      const lang = curLang();
       DEFAULT_CATEGORIES.forEach(([name, icon, subs], i) => {
         const id = U.uid();
-        recs.push({ id, name, parentId: null, color: PALETTE[i], icon, archived: false, archivedAt: null, createdAt: now, updatedAt: now });
-        subs.forEach(s => recs.push({ id: U.uid(), name: s, parentId: id, color: PALETTE[i], icon: '', archived: false, archivedAt: null, createdAt: now, updatedAt: now }));
+        recs.push({ id, name: defaultName(name, lang), parentId: null, color: PALETTE[i], icon, archived: false, archivedAt: null, createdAt: now, updatedAt: now });
+        subs.forEach(s => recs.push({ id: U.uid(), name: defaultName(s, lang), parentId: id, color: PALETTE[i], icon: '', archived: false, archivedAt: null, createdAt: now, updatedAt: now }));
       });
       await App.storage.putMany('categories', recs);
       this.categories = this.categories.concat(recs); this.reindex();
@@ -539,7 +574,7 @@
     /* ================= Sample data (for trying the app) ================= */
 
     async addSampleData() {
-      const pickSub = name => this.categories.find(c => c.parentId && !c.archived && c.name === name);
+      const pickSub = name => this.categories.find(c => c.parentId && !c.archived && (c.name === name || c.name === DEFAULT_NAMES_AZ[name]));
       const samples = [
         ['Groceries', 'Supermarket', 25, 70], ['Restaurants', 'Dinner out', 20, 60], ['Coffee', 'Coffee', 3, 7],
         ['Delivery', 'Food delivery', 12, 30], ['Fuel', 'Fuel', 30, 60], ['Taxi', 'Taxi ride', 4, 15],

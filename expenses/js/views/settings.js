@@ -21,6 +21,10 @@
         ? '<section class="card"><h2>Cloud account</h2><p>Signed in as <b>' + U.esc(App.storage.user.email || App.storage.user.displayName || '') + '</b>. Your data is saved in your Google account (Firebase) and syncs across devices.</p>' +
           '<div class="btn-row"><button class="btn ghost" data-sync>Sync now</button><button class="btn ghost" data-signout>Sign out</button></div></section>'
         : '<section class="card"><h2>Cloud sync</h2><p class="muted">Off – data is stored only in this browser. To sync with your phone, follow <code>SETUP-CLOUD.md</code> in the app folder.</p></section>') +
+      '<section class="card"><h2>Dashboard panels</h2><p class="muted small">Choose what to show on the Dashboard.</p><div class="panel-toggles">' +
+      [['debts', 'Borrowed & Lent'], ['budget', 'Monthly budget'], ['quick', 'Quick add buttons']].map(([k, l]) =>
+        '<label class="check-row"><input type="checkbox" data-panel="' + k + '"' + ((s.hiddenPanels || []).includes(k) ? '' : ' checked') + '> <span>' + l + '</span></label>').join('') +
+      '</div></section>' +
       '<section class="card"><h2>Backup & restore</h2>' +
       '<p class="muted">' + (App.storage.requiresAuth ? 'Your data is stored in: ' + U.esc(App.storage.name) + '. An extra backup file is still a good idea.' : 'Your data is stored in this browser on this device (' + U.esc(App.storage.name) + ').') + ' Download a backup regularly – for example into your OneDrive or Google Drive folder – and restore it on any device.</p>' +
       '<div class="stat-line"><span><b>' + D.expenses.length + '</b> expenses</span><span><b>' + D.categories.filter(c => !c.parentId).length + '</b> categories</span><span><b>' + D.categories.filter(c => c.parentId).length + '</b> subcategories</span><span data-persist class="muted small"></span></div>' +
@@ -42,6 +46,11 @@
       '<p class="muted small center">Expense Manager · data schema v' + (s.schemaVersion || 1) + '</p>';
 
     const theme = UI.$('#s-theme', root), cur = UI.$('#s-cur', root), week = UI.$('#s-week', root);
+    UI.$$('[data-panel]', root).forEach(cb => cb.addEventListener('change', () => {
+      const hidden = new Set(D.settings.hiddenPanels || []);
+      cb.checked ? hidden.delete(cb.dataset.panel) : hidden.add(cb.dataset.panel);
+      D.saveSettings({ hiddenPanels: Array.from(hidden) });
+    }));
     const lang = UI.$('#s-lang', root);
     lang.value = App.i18n.lang;
     lang.addEventListener('change', () => App.i18n.set(lang.value));

@@ -26,7 +26,13 @@ A plain HTML/CSS/JS app with no build step and no framework. Classic `<script>` 
 - **Quick-add favourites**: `settings.favourites` (max 12). `App.data.quickAdd(id)` saves one as today's expense. Deleting expenses goes through `UI.deleteWithUndo` (a 6-second Undo that re-saves the same records).
 - **Phone**: the bottom `.tabbar` shows at ≤860px. PWA: `manifest.json`, `icons/` (generated with PowerShell System.Drawing), and `sw.js` (network-first for app files, cache-first for the pinned CDN libraries). **Bump `CACHE` in sw.js only if you change the caching strategy**; normal updates show up without it.
 
+- **Default categories** follow the language: `DEFAULT_NAMES_AZ` in `data.js`. `translateDefaultCategories(lang)` renames only names that are still exactly a default name. It runs when the language is switched, and on startup in Azerbaijani.
+- **Dashboard panels** (budget, debts, quick add) can be hidden. They're stored in `settings.hiddenPanels` and toggled in Settings → Dashboard panels.
+
 ## Deployment
+
+**Every release: bump the `?v=` value on all css/js links in `index.html`** (one value everywhere). GitHub Pages lets browsers cache files for 10 minutes; without the bump, phones mixed old and new files (a new page with old data code: it couldn't save debts and showed English).
+
 
 The live site is GitHub Pages: repository `rrashadaliyev-ui/ExpensesR`, with the app in the **`expenses/` subfolder** (URL `https://rrashadaliyev-ui.github.io/ExpensesR/expenses/`). Firebase project `expenses-2a6dc`. To deploy, upload the changed files into `ExpensesR/expenses/` on GitHub.
 

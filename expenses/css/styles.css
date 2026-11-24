@@ -314,8 +314,24 @@ select:disabled { opacity: .6; }
 .tag.ok { background: var(--ok-soft); color: var(--ok); }
 .segmented.two { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 14px; }
 .segmented.two span { display: block; text-align: center; }
-.mini-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
-.mini-cards .card { margin: 0; cursor: pointer; }
+.mini-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; align-items: start; }
+.mini-cards.single { grid-template-columns: 1fr; }
+.mini-cards .card { margin: 0; }
+.budget-card { cursor: pointer; position: relative; }
+.budget-card .panel-hide { position: absolute; top: 8px; right: 8px; }
+.panel-hide { color: var(--muted); flex: none; }
+.debt-panel .card-head { margin-bottom: 6px; align-items: center; }
+.plain-link { color: inherit; text-decoration: none; }
+.debt-mini { list-style: none; margin: 10px 0; padding: 0; }
+.debt-mini li { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: .92rem; }
+.debt-mini .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.debt-mini b { font-variant-numeric: tabular-nums; }
+.dot.lent, .dot.borrowed { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.dot.borrowed { background: var(--danger); }
+.quick .panel-hide { order: 99; align-self: center; }
+.quick-hint-row { display: flex; align-items: flex-start; gap: 8px; }
+.quick-hint-row .quick-hint { flex: 1; margin-top: -6px; }
+.panel-toggles { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 8px; }
 @media (max-width: 640px) { .kpis.three { grid-template-columns: 1fr; } .mini-cards { grid-template-columns: 1fr; gap: 10px; } .debt-list { grid-template-columns: 1fr; } }
 
 /* ============ Quick-add favourites ============ */
@@ -348,8 +364,9 @@ select:disabled { opacity: .6; }
   .tabbar a.on .ti, .tabbar button.on .ti { filter: none; opacity: 1; }
   .tabbar .tab-add { width: 54px; height: 54px; margin: -22px auto 0; border-radius: 50%; background: var(--accent); color: #fff; font-size: 1.8rem; line-height: 1;
     justify-content: center; box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 45%, transparent); }
-  .content { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
-  #toasts { bottom: calc(84px + env(safe-area-inset-bottom)); }
+  /* "body" prefix = stronger than the general rules further down the file */
+  body .content { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  body #toasts { bottom: calc(84px + env(safe-area-inset-bottom)); }
   .topbar [data-global-add] { display: none; }
   body.signed-out .tabbar { display: none; }
   .bulk-bar { top: 60px; }

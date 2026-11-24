@@ -28,6 +28,8 @@
    */
   function confirmed(promise) {
     promise.catch(e => window.dispatchEvent(new CustomEvent('storage-error', { detail: friendly(e) })));
+    // Offline: the change is already stored on this device and uploads later – don't wait at all.
+    if (!navigator.onLine) return Promise.resolve();
     return Promise.race([promise, new Promise(r => setTimeout(r, ACK_WAIT))]);
   }
 

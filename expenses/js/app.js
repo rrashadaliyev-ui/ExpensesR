@@ -94,6 +94,8 @@
     // Use the language saved in settings (e.g. chosen on another device) if this device has no choice yet.
     const savedLang = App.data.settings.lang;
     if (savedLang && !App.i18n.hasLocal && savedLang !== App.i18n.lang) { App.i18n.set(savedLang); return; }
+    // Azerbaijani selected but default categories still in English (e.g. created before) → rename them.
+    if (App.i18n.lang === 'az') { try { await App.data.translateDefaultCategories('az'); } catch (e) { /* not critical */ } }
     // Ask the browser not to evict our data under storage pressure.
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 

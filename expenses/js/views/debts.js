@@ -121,5 +121,5 @@
   }
 
   App.views = App.views || {};
-  App.views.debts = { title: 'Borrowed & Lent', render };
+  App.views.debts = { title: 'Borrowed & Lent', render, openDialog: debtDialog };
 })();

@@ -25,7 +25,8 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (new URL(url).origin !== self.location.origin) return;
-  e.respondWith(fetch(req).then(res => {
+  // cache: 'no-cache' = always ask GitHub whether the file changed (avoids the browser's 10-minute cache).
+  e.respondWith(fetch(url, { cache: 'no-cache', credentials: 'same-origin' }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
   }).catch(() => caches.match(req, { ignoreSearch: true }).then(hit => hit || caches.match('./index.html'))));
