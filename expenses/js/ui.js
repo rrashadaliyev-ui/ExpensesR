@@ -13,10 +13,10 @@
   UI.h = function (html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 
   /* ---------------- Toast ---------------- */
-  // action (optional) = { label: 'Undo', fn: () => ... } shows a button inside the message.
+  // action (optional) = { label: 'Undo', fn: () => ..., life: ms } shows a button inside the message.
   UI.toast = function (msg, type, action) {
     const el = UI.h('<div class="toast ' + (type || 'ok') + '" role="status"><span>' + U.esc(msg) + '</span></div>');
-    const life = action ? 6000 : (type === 'err' ? 5000 : 2800);
+    const life = action ? (action.life || 6000) : (type === 'err' ? 5000 : 2800);
     if (action) {
       const b = UI.h('<button class="toast-btn">' + U.esc(action.label) + '</button>');
       b.addEventListener('click', () => { el.remove(); action.fn(); });

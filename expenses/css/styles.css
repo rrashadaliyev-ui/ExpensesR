@@ -473,6 +473,16 @@ body.signed-out .content { margin: 0 auto; }
   .icons { max-height: 132px; overflow-y: auto; }
 }
 
+/* ============ Delete-all dialog ============ */
+.delete-all-list { list-style: none; margin: 6px 0 10px; padding: 0; border: 1px solid var(--line); border-radius: 10px; }
+.delete-all-list li { display: flex; justify-content: space-between; padding: 8px 12px; }
+.delete-all-list li + li { border-top: 1px solid var(--line); }
+.delete-step { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.delete-step .btn-row { margin-top: 8px; align-items: center; }
+.delete-step input { width: 100%; margin-top: 4px; }
+.confirm-word { color: var(--danger); background: var(--danger-soft); padding: 2px 8px; border-radius: 6px; font-weight: 700; letter-spacing: .05em; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ============ Print / PDF ============ */
 @media print {
   :root, :root[data-theme="dark"] { --bg: #fff; --card: #fff; --card-2: #f6f7f9; --text: #000; --muted: #555; --line: #ccc; --shadow: none; }

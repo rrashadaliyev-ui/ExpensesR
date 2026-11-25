@@ -127,10 +127,49 @@
         const n = await D.removeSampleData(); UI.toast(n + ' sample expenses removed');
       }
     });
-    UI.$('[data-clear]', root).addEventListener('click', async () => {
-      if (await UI.confirm({ title: 'Delete ALL data?', message: 'This permanently deletes <b>all ' + D.expenses.length + ' expenses and all categories</b>. It cannot be undone unless you have a backup file.', okText: 'Delete everything', danger: true })) {
-        await D.clearAll(); UI.toast('All data deleted');
-      }
+    UI.$('[data-clear]', root).addEventListener('click', deleteAllDialog);
+  }
+
+  // "Delete all data": 1) see what goes and download a backup, 2) type the confirm word,
+  // 3) after deleting, a 15-second Undo restores everything from an in-memory copy.
+  function deleteAllDialog() {
+    const D = App.data;
+    const word = App.i18n.lang === 'az' ? 'SİL' : 'DELETE';
+    const norm = s => String(s || '').trim().toUpperCase().replace(/İ/g, 'I');
+    const accepted = ['SIL', 'DELETE'];
+    const body = UI.h('<div class="delete-all">' +
+      '<p>This permanently deletes:</p>' +
+      '<ul class="delete-all-list">' +
+      '<li><span>Expenses</span><b>' + D.expenses.length + '</b></li>' +
+      '<li><span>Categories</span><b>' + D.categories.length + '</b></li>' +
+      '<li><span>Borrowed & Lent</span><b>' + (D.debts || []).length + '</b></li></ul>' +
+      '<p class="muted small">Settings are kept, and the default categories are created again.</p>' +
+      '<div class="delete-step"><b>Step 1 – Download a backup (recommended)</b>' +
+      '<div class="btn-row"><button type="button" class="btn ghost" data-dl>Download backup (.json)</button><span class="muted small" data-dl-done hidden>✓ Backup downloaded</span></div></div>' +
+      '<div class="delete-step"><label for="del-word"><b>Step 2 – Confirm</b></label>' +
+      '<p class="small"><span>To confirm, type</span> <code class="confirm-word">' + word + '</code></p>' +
+      '<input id="del-word" autocomplete="off" autocapitalize="characters" spellcheck="false"></div></div>');
+    const m = UI.modal({ title: 'Delete ALL data?', body,
+      footer: '<button class="btn ghost" data-close>Cancel</button><button class="btn danger" data-ok disabled>Delete everything</button>' });
+    const input = UI.$('#del-word', body), ok = UI.$('[data-ok]', m.el);
+    const valid = () => accepted.includes(norm(input.value));
+    input.addEventListener('input', () => { ok.disabled = !valid(); });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter' && valid()) ok.click(); });
+    setTimeout(() => input.focus(), 40);
+    UI.$('[data-dl]', body).addEventListener('click', () => {
+      UI.download('expense-backup-' + U.today() + '.json', JSON.stringify(D.backupObject(), null, 1), 'application/json');
+      UI.$('[data-dl-done]', body).hidden = false;
+    });
+    let busy = false;
+    ok.addEventListener('click', async () => {
+      if (busy || !valid()) return; busy = true; ok.disabled = true;
+      const snapshot = JSON.parse(JSON.stringify(D.backupObject()));
+      try {
+        await D.clearAll(); m.close();
+        UI.toast('All data deleted', 'ok', { label: 'Undo', life: 15000, fn: async () => {
+          try { await D.restoreBackup(snapshot); UI.toast('Restored'); } catch (e) { UI.toast(e.message, 'err'); }
+        } });
+      } catch (e) { UI.toast(e.message, 'err'); busy = false; ok.disabled = !valid(); }
     });
   }
 
